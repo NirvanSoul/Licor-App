@@ -1,0 +1,271 @@
+.page-container {
+    padding: 2rem;
+    background-color: #F5F5F7;
+    min-height: 100vh;
+}
+
+@media (max-width: 640px) {
+    .page-container {
+        padding: 1rem;
+    }
+
+    .orders-grid {
+        grid-template-columns: 1fr;
+        /* Full width cards */
+    }
+
+    .order-card {
+        margin-bottom: 0.5rem;
+    }
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.text-2xl {
+    font-size: 1.5rem;
+}
+
+.font-bold {
+    font-weight: 700;
+}
+
+.text-gray-800 {
+    color: #1f2937;
+}
+
+.orders-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.empty-state {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem;
+    color: #9CA3AF;
+}
+
+/* Order Card */
+.order-card {
+    background: white;
+    border-radius: 16px;
+    padding: 1.25rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.2s;
+    border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.order-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+}
+
+.order-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px dashed #E5E7EB;
+}
+
+.customer-name {
+    font-weight: 700;
+    color: #111827;
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+.ticket-number {
+    font-size: 0.8rem;
+    color: #6B7280;
+    font-family: monospace;
+}
+
+.time-badge {
+    background: #FEF3C7;
+    color: #D97706;
+    padding: 0.25rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.order-items-list {
+    flex: 1;
+    margin-bottom: 1rem;
+    /* max-height removed to allow TicketGrid to expand */
+}
+
+.order-item-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    color: #374151;
+}
+
+.item-qty {
+    font-weight: 600;
+    color: #111827;
+    min-width: 20px;
+}
+
+.item-desc {
+    flex: 1;
+}
+
+.order-footer {
+    margin-top: auto;
+}
+
+.total-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    font-weight: 700;
+    color: #111827;
+}
+
+.actions-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+}
+
+.action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.6rem;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.2s;
+    border: none;
+}
+
+.action-btn.add {
+    background: #F3F4F6;
+    color: #374151;
+}
+
+.action-btn.add:hover {
+    background: #E5E7EB;
+}
+
+.action-btn.pay {
+    background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+    color: white;
+}
+
+
+.action-btn.pay:hover {
+    opacity: 0.9;
+}
+
+/* Ticket Grid Styles (Moved from Inline) */
+.ticket-grid-container {
+    background: #fff;
+    border-radius: 16px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid #f3f4f6;
+}
+
+.ticket-grid-header {
+    margin-bottom: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.ticket-grid-header-text {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #374151;
+}
+
+.ticket-slots-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.beer-selector-container {
+    border-top: 1px solid #eee;
+    padding-top: 1rem;
+}
+
+.beer-selector-label {
+    font-size: 0.8rem;
+    color: #9CA3AF;
+    margin-bottom: 0.5rem;
+    text-align: center;
+}
+
+.beer-selector-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+}
+
+.beer-selector-btn {
+    padding: 0.25rem 0.1rem;
+    border-radius: 8px;
+    border: 1px solid #E5E7EB;
+    background: #F9FAFB;
+    font-weight: 600;
+    font-size: 0.75rem;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.1s;
+    height: 48px;
+    /* Fixed height for uniformity */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    word-break: break-word;
+    /* Handle long names */
+    line-height: 1.1;
+    overflow: hidden;
+}
+
+.beer-selector-btn:active {
+    background: #E5E7EB;
+    transform: scale(0.98);
+}
+
+.slot-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: #EF4444;
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 700;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
