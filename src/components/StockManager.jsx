@@ -77,28 +77,13 @@ export default function StockManager() {
                 {/* Input Controls */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.25rem' }}>
 
-                    {/* Manual Unit Adjuster */}
+                    {/* Manual Unit Adjuster (Siempre Visible - Equivale a UNIDADES) */}
                     <div className="stock-controls" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <button
                             onClick={() => {
-                                const delta = isRemove ? 1 : -1; // If removing, minus button adds back (approaches 0). Logic: Update(-1) adds -1. 
-                                // Wait, simple logic:
-                                // Mode Add: Left(-) Right(+)
-                                // Mode Remove: Left(+) Right(-)  <-- Usually unintuitive.
-                                // Better: ALWAYS Left(-) Right(+) relative to value?
-                                // User wants to REMOVE.
-                                // Button A: "Remove 1". Button B: "Add 1".
-                                // If Mode is Remove, clicking "+" means "Increase Removal amount" (more negative)?
-                                // Let's keep it standard: plus adds quantity, minus removes quantity.
-                                // BUT the mode sets the CONTEXT.
-                                // Actually, if mode is REMOVE, usually users just want buttons that say "Scrap 1", "Scrap Box".
-                                // Let's simplify: 
-                                // The central number is the PENDING CHANGE.
-                                // Left Button: Decrease Pending Change (towards negative)
-                                // Right Button: Increase Pending Change (towards positive)
+                                // Logic: Update(-1) removes 1 unit.
                                 updatePendingInventory(beer, subtype, -1);
                             }}
-                            // disabled={pending <= 0} // No, allow going negative for removal
                             style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#F3F4F6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         >
                             <Minus size={18} color="#4B5563" />
@@ -121,14 +106,16 @@ export default function StockManager() {
                         </button>
                     </div>
 
-                    {/* Quick Add Buttons */}
+                    {/* Quick Add Buttons (Solo CAJAS) */}
                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                         {Array.isArray(emissionOptions) && emissionOptions.map(emissionName => {
                             // SKIP "Unidad" as it's the default main input
                             if (emissionName === 'Unidad') return null;
 
+                            // FILTRO AÑADIDO: Solo permitir 'Caja'
+                            if (emissionName !== 'Caja') return null;
+
                             const amount = getUnitsPerEmission(emissionName, subtype);
-                            // Only show quick buttons for multi-unit types (Caja, SixPack, etc > 1)
                             // Safe check: ensure amount is a number and > 1
                             if (!amount || amount <= 1) return null;
 
@@ -171,26 +158,20 @@ export default function StockManager() {
         if (count === 0) return null;
         const [beer, subtype] = key.split('_');
 
-        // Find the best "Large Unit" to display (Largest configured > 1)
-        // We prioritize 'Caja' if available and valid (>1), otherwise looks for largest.
         let bestEmission = 'Caja';
         let unitsPerBest = getUnitsPerEmission('Caja', subtype);
 
-        // If Caja is 1 (unconfigured or small) -> try to find a better one
         if (unitsPerBest <= 1) {
-            // Search for any other emission > 1
             const validEmissions = Array.isArray(emissionOptions)
                 ? emissionOptions.filter(e => getUnitsPerEmission(e, subtype) > 1)
                 : [];
             if (validEmissions.length > 0) {
-                // Pick the first one or the one with largest unit? Let's pick largest.
                 validEmissions.sort((a, b) => getUnitsPerEmission(b, subtype) - getUnitsPerEmission(a, subtype));
                 bestEmission = validEmissions[0];
                 unitsPerBest = getUnitsPerEmission(bestEmission, subtype);
             }
         }
 
-        // Final Calc
         const displayUnits = unitsPerBest > 1 ? (count / unitsPerBest).toFixed(1) : 0;
 
         return { beer, subtype, count, displayUnits, bestEmission, unitsPerBest };
@@ -288,7 +269,6 @@ export default function StockManager() {
             <div className="stock-grid" style={{ display: 'grid', gap: '1rem' }}>
                 {Array.isArray(beerTypes) && beerTypes.map(beer => {
                     const isExpanded = expandedSections[beer];
-                    // Calculate pending count for this beer to badge it if collapsed
                     const pendingForBeer = Object.entries(pendingInventory).reduce((sum, [key, val]) => {
                         return key.startsWith(beer + '_') ? sum + val : sum;
                     }, 0);
@@ -338,8 +318,6 @@ export default function StockManager() {
                             ) : (
                                 <div>
                                     {emissionOptions.map(emission => {
-                                        // Filter out 'abstract' emissions if needed, but for now show all to ensure user sees their "New Emission"
-                                        // We might typically hide "Unidad" if it's redundant, but let's keep it robust.
                                         if (emission === 'Unidad' || emission === 'Libre') return null;
 
                                         return (
@@ -347,7 +325,6 @@ export default function StockManager() {
                                                 key={`${beer}-${emission}`}
                                                 beer={beer}
                                                 subtype={emission}
-                                                // Icon logic: check name for 'lata' or default to Package
                                                 icon={emission && typeof emission === 'string' && emission.toLowerCase().includes('lata') ? Box : Package}
                                             />
                                         );
