@@ -60,24 +60,21 @@ export const ProductProvider = ({ children }) => {
                 }
 
                 // 2. NUEVO: Cargar Emisiones desde la tabla SQL dedicada
-                // Reemplazamos la lógica de 'app_settings' por 'emission_types'
                 const { data: emissionsData } = await supabase
                     .from('emission_types')
                     .select('*')
-                    .order('units', { ascending: true }); // Ordenar por tamaño
+                    .order('units', { ascending: true }); 
 
                 if (emissionsData) {
                     setRawEmissions(emissionsData);
-                    // Generamos la lista de nombres para que StockManager.jsx funcione igual
                     // Aseguramos que 'Unidad' esté al principio
                     const names = ['Unidad', ...emissionsData.map(e => e.name).filter(n => n !== 'Unidad')];
                     setEmissionOptions(names);
                 } else {
-                    // Fallback visual si falla la carga
                     setEmissionOptions(['Unidad', 'Caja']);
                 }
 
-                // Cargar Subtipos (Mantenemos app_settings para esto por ahora)
+                // Cargar Subtipos
                 const { data: settings } = await supabase.from('app_settings').select('key, value').eq('organization_id', organizationId);
                 if (settings) {
                     settings.forEach(s => {
@@ -185,8 +182,6 @@ export const ProductProvider = ({ children }) => {
     const getBeerColor = (beerName) => {
         const hex = beerColors[beerName];
         if (!hex) return { bg: '#F3F4F6', text: '#374151', border: '#D1D5DB', raw: '#9CA3AF' };
-
-        // Simple contrast logic
         const r = parseInt(hex.substr(1, 2), 16);
         const g = parseInt(hex.substr(3, 2), 16);
         const b = parseInt(hex.substr(5, 2), 16);
@@ -195,21 +190,16 @@ export const ProductProvider = ({ children }) => {
         return { bg: hex, text: textColor, border: 'rgba(0,0,0,0.1)', raw: hex };
     };
 
-    // --- 2. EMISSION TYPES (NUEVA LÓGICA SQL) ---
-
-    // Función actualizada para aceptar (nombre, unidades)
+    // --- 2. EMISSION TYPES ---
     const addEmissionType = async (name, units = 1) => {
         if (!emissionOptions.includes(name)) {
             try {
-                // Insertar en la tabla nueva
                 const { data, error } = await supabase
                     .from('emission_types')
                     .insert([{ name, units: parseInt(units) }])
                     .select();
 
                 if (error) throw error;
-
-                // Actualizar estado local
                 setRawEmissions(prev => [...prev, ...data]);
                 setEmissionOptions(prev => [...prev, name]);
                 return { success: true };
@@ -233,7 +223,6 @@ export const ProductProvider = ({ children }) => {
                 .eq('name', name);
 
             if (error) throw error;
-
             setEmissionOptions(prev => prev.filter(e => e !== name));
             setRawEmissions(prev => prev.filter(e => e.name !== name));
         } catch (error) {
@@ -279,28 +268,21 @@ export const ProductProvider = ({ children }) => {
         }, { onConflict: 'organization_id, emission, subtype' });
     };
 
-    // --- LÓGICA DE UNIDADES (Actualizada para leer de la tabla nueva) ---
     const getUnitsPerEmission = (emission, subtype) => {
         if (!emission || emission === 'Unidad') return 1;
         if (emission === 'Libre') return 1;
 
-        // Prioridad 1: Conversión específica (Ej: Caja de Latas vs Botellas)
-        // Esto mantiene la compatibilidad con tu tabla 'conversions' existente
         const conversionKey = `${emission}_${subtype}`;
         if (conversions[conversionKey]) return conversions[conversionKey];
 
-        // Prioridad 2: Valor Global de la nueva tabla emission_types
-        // (Ej: Si creaste "Pack" con 6 unidades, devuelve 6 para todo)
         const dbEmission = rawEmissions.find(e => e.name === emission);
         if (dbEmission && dbEmission.units) return dbEmission.units;
 
-        // Prioridad 3: Fallbacks "inteligentes" antiguos
         if (emission === 'Caja') {
             if (subtype && subtype.toLowerCase().includes('lata')) return 24;
             if (subtype && subtype.toLowerCase().includes('tercio')) return 36;
             return 12;
         }
-
         return 1;
     };
 
@@ -330,54 +312,63 @@ export const ProductProvider = ({ children }) => {
         return usd * (exchangeRates.bcv || 0);
     };
 
-    // --- INVENTORY MANAGEMENT ---
+    // --- INVENTORY MANAGEMENT (CORREGIDO) ---
+    
     const addStock = async (beer, emission, subtype, quantity) => {
         const units = quantity * getUnitsPerEmission(emission, subtype);
         const key = `${beer}_${subtype}`;
-        let newTotal = 0;
+        
+        // CORRECCIÓN: Calcular el nuevo total usando el estado actual DIRECTAMENTE
+        // No confiamos en el callback de setInventory para obtener el valor para la DB
+        const currentTotal = inventory[key] || 0;
+        const newTotal = currentTotal + units;
 
-        setInventory(prev => {
-            const current = prev[key] || 0;
-            newTotal = current + units;
-            return { ...prev, [key]: newTotal };
-        });
+        // 1. Actualizar UI
+        setInventory(prev => ({ ...prev, [key]: newTotal }));
 
+        // 2. Actualizar Base de Datos con el valor calculado explícitamente
         const productId = productMap[beer];
         if (productId) {
-            await supabase.from('inventory').upsert({
+            const { error } = await supabase.from('inventory').upsert({
                 organization_id: organizationId,
                 product_id: productId,
                 subtype,
-                quantity: newTotal
+                quantity: newTotal 
             }, { onConflict: 'organization_id, product_id, subtype' });
+            
+            if (error) console.error("Error guardando stock en BD:", error.message);
         }
     };
 
     const deductStock = async (beer, emission, subtype, quantity) => {
         const units = quantity * getUnitsPerEmission(emission, subtype);
         const key = `${beer}_${subtype}`;
-        let newTotal = 0;
+        
+        // CORRECCIÓN: Misma lógica para deduct
+        const currentTotal = inventory[key] || 0;
+        const newTotal = Math.max(0, currentTotal - units);
 
-        setInventory(prev => {
-            const current = prev[key] || 0;
-            newTotal = Math.max(0, current - units);
-            return { ...prev, [key]: newTotal };
-        });
+        setInventory(prev => ({ ...prev, [key]: newTotal }));
 
         const productId = productMap[beer];
         if (productId) {
-            await supabase.from('inventory').upsert({
+            const { error } = await supabase.from('inventory').upsert({
                 organization_id: organizationId,
                 product_id: productId,
                 subtype,
                 quantity: newTotal
             }, { onConflict: 'organization_id, product_id, subtype' });
+
+            if (error) console.error("Error guardando stock en BD:", error.message);
         }
     };
 
     const setBaseStock = async (beer, subtype, units) => {
         const key = `${beer}_${subtype}`;
+        
+        // CORRECCIÓN: Simple asignación directa
         setInventory(prev => ({ ...prev, [key]: units }));
+        
         const productId = productMap[beer];
         if (productId) {
             await supabase.from('inventory').upsert({
@@ -421,7 +412,7 @@ export const ProductProvider = ({ children }) => {
 
     const clearPendingInventory = () => setPendingInventory({});
 
-    const commitInventory = () => {
+    const commitInventory = async () => {
         const timestamp = new Date().toLocaleString('es-VE', {
             day: '2-digit', month: '2-digit', year: 'numeric',
             hour: '2-digit', minute: '2-digit', hour12: true
@@ -430,12 +421,15 @@ export const ProductProvider = ({ children }) => {
         const movements = [];
         let totalCount = 0;
 
-        Object.entries(pendingInventory).forEach(([key, quantity]) => {
+        // Procesar todos los cambios
+        const promises = Object.entries(pendingInventory).map(async ([key, quantity]) => {
             const [beer, subtype] = key.split('_');
-            addStock(beer, 'Unidad', subtype, quantity); // Commit real
+            await addStock(beer, 'Unidad', subtype, quantity); // Ahora espera a que termine addStock
             totalCount += quantity;
             movements.push({ beer, subtype, quantity });
         });
+
+        await Promise.all(promises);
 
         const report = {
             id: Date.now(),
@@ -463,7 +457,7 @@ export const ProductProvider = ({ children }) => {
             addBeerType,
             removeBeerType,
             emissionOptions,
-            addEmissionType, // <--- Actualizado
+            addEmissionType,
             removeEmissionType,
             subtypes,
             conversions,
@@ -480,7 +474,7 @@ export const ProductProvider = ({ children }) => {
             getBsPrice,
             exchangeRates,
             fetchRates,
-            getUnitsPerEmission, // <--- Actualizado
+            getUnitsPerEmission,
             pendingInventory,
             updatePendingInventory,
             clearPendingInventory,
