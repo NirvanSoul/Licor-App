@@ -1,73 +1,121 @@
+
 import React, { useState } from 'react';
 import { useProduct } from '../context/ProductContext';
-import { Minus, Plus, Box, Package, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { useOrder } from '../context/OrderContext';
+import { Minus, Plus, Box, Package, ChevronDown, ChevronUp, Layers, Trash2, AlertTriangle } from 'lucide-react';
+import ContainerSelector from './ContainerSelector';
 
 export default function StockManager() {
     const {
         beerTypes,
         getInventory,
-        emissionOptions,
         getUnitsPerEmission,
-        pendingInventory,        // Use Global State
-        updatePendingInventory, // Use Global Action
-        commitInventory,        // Use Global Commit
-        inventoryHistory        // Access History
+        pendingInventory,
+        updatePendingInventory,
+        getPendingInventory,
+        inventoryHistory,
+        breakageHistory = [], // Default to empty array to avoid crash
     } = useProduct();
 
-    const [historyOpen, setHistoryOpen] = useState(false);
-    const [expandedSections, setExpandedSections] = useState({});
+    const { pendingOrders } = useOrder();
 
-    // NEW MODE: 'add' (Entrada) vs 'remove' (Salida)
-    const [mode, setMode] = useState('add'); // 'add' | 'remove'
+    const [historyOpen, setHistoryOpen] = useState(false);
+    const [wasteSectionOpen, setWasteSectionOpen] = useState(false); // Collapsible for Waste
+    const [expandedSections, setExpandedSections] = useState({});
+    const [beerSubtypes, setBeerSubtypes] = useState({});
+
+    // Merge History for the big modal
+    // Ensure both are arrays before spreading
+    const safeInvHistory = Array.isArray(inventoryHistory) ? inventoryHistory : [];
+    const safeBreakHistory = Array.isArray(breakageHistory) ? breakageHistory : [];
+    const allHistory = [...safeInvHistory, ...safeBreakHistory].sort((a, b) => b.id - a.id);
+
+    // Recent Waste for the footer section
+    const recentWaste = safeBreakHistory.slice(0, 5);
 
     const toggleSection = (beer) => {
         setExpandedSections(prev => ({ ...prev, [beer]: !prev[beer] }));
+        if (!beerSubtypes[beer]) {
+            setBeerSubtypes(prev => ({ ...prev, [beer]: 'Botella' }));
+        }
     };
 
-    // Helper to access pending value safely
-    const getPending = (beer, subtype) => pendingInventory[`${beer}_${subtype}`] || 0;
+    const handleSubtypeChange = (beer, subtype) => {
+        setBeerSubtypes(prev => ({ ...prev, [beer]: subtype }));
+    };
+
+    // --- REAL TIME STOCK CALCULATION ---
+    const getReservedQuantity = (beer, subtype) => {
+        if (!pendingOrders) return 0;
+        let reserved = 0;
+        pendingOrders.forEach(order => {
+            if (order.status !== 'OPEN') return;
+            order.items.forEach(item => {
+                if (item.name === beer && item.subtype === subtype) {
+                    const emission = item.emission || 'Unidad';
+                    const units = getUnitsPerEmission(emission, subtype);
+                    reserved += (item.quantity * units);
+                }
+            });
+        });
+        return reserved;
+    };
 
     // Helper to render a stock control row
-    const StockRow = ({ beer, subtype, icon: Icon }) => {
+    const StockRow = ({ beer, subtype, emission, icon: Icon }) => {
         const currentStock = getInventory(beer, subtype);
-        const pending = getPending(beer, subtype);
+        const reservedStock = getReservedQuantity(beer, subtype);
+        const effectiveStock = currentStock - reservedStock;
 
-        // Calculate "New Total" for preview
-        const previewTotal = currentStock + pending;
+        // Pending Input
+        const pendingCount = getPendingInventory(beer, subtype, emission);
+        const isNegative = pendingCount < 0;
+        const isPositive = pendingCount > 0;
+        const activeColor = isNegative ? '#EF4444' : (isPositive ? '#34c759' : 'var(--text-primary)');
 
-        // Visual styles based on mode
-        const isRemove = mode === 'remove';
-        const activeColor = isRemove ? '#EF4444' : '#34c759';
-        const bgActive = isRemove ? '#FEF2F2' : '#e8fceb';
+        const relevantPending = pendingInventory || {};
+        const allPendingForSubtype = Object.entries(relevantPending).reduce((sum, [key, qty]) => {
+            if (key.startsWith(`${beer}_${subtype}_`)) {
+                const parts = key.split('_');
+                const em = parts[parts.length - 1];
+                return sum + (qty * getUnitsPerEmission(em, subtype));
+            }
+            return sum;
+        }, 0);
+
+        const previewTotal = effectiveStock + allPendingForSubtype;
 
         return (
             <div className="stock-row" style={{
-                display: 'flex',
+                display: 'flex', // Revert to standard flex
                 flexDirection: 'column',
                 padding: '1rem',
                 borderBottom: '1px solid #f0f0f0',
                 gap: '0.75rem',
-                background: pending !== 0 ? (isRemove ? '#fff5f5' : '#fafffb') : 'transparent',
-                transition: 'background 0.3s'
+                background: 'transparent',
+                borderRadius: '12px'
             }}>
-                {/* Header: Name + Live Stock Preview */}
+                {/* Header */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <Icon size={20} className="text-gray-500" />
-                        <span style={{ fontSize: '1rem', color: '#111827', fontWeight: 600 }}>{subtype}</span>
+                        <Icon size={20} className="text-gray-500" style={{ color: 'var(--text-secondary)' }} />
+                        <span style={{ fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 600 }}>{emission}</span>
                     </div>
 
-                    {/* Stock Display: Current -> New */}
+                    {/* Stock Display */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem' }}>
-                        <span style={{ color: '#666' }}>Actual: {currentStock}</span>
-                        {pending !== 0 && (
+                        <span style={{ color: '#666' }}>Actual: {effectiveStock}</span>
+                        {reservedStock > 0 && (
+                            <span style={{ fontSize: '0.70rem', color: '#F59E0B', background: '#FFFBEB', padding: '2px 4px', borderRadius: '4px' }}>
+                                (Res: {reservedStock})
+                            </span>
+                        )}
+
+                        {allPendingForSubtype !== 0 && (
                             <>
                                 <span style={{ color: '#ccc' }}>&rarr;</span>
-                                <span style={{ color: activeColor, fontWeight: 700 }}>
+                                <span style={{ color: (allPendingForSubtype < 0 ? '#EF4444' : '#34c759'), fontWeight: 700 }}>
                                     {previewTotal}
-                                </span>
-                                <span style={{ fontSize: '0.75rem', color: activeColor, background: bgActive, padding: '2px 6px', borderRadius: '4px' }}>
-                                    ({pending > 0 ? '+' : ''}{pending})
                                 </span>
                             </>
                         )}
@@ -75,126 +123,69 @@ export default function StockManager() {
                 </div>
 
                 {/* Input Controls */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.25rem' }}>
-
-                    {/* Manual Unit Adjuster (Siempre Visible - Equivale a UNIDADES) */}
-                    <div className="stock-controls" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '0.5rem' }}>
+                    <div className="stock-controls" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', background: 'var(--bg-app)', padding: '6px 12px', borderRadius: '16px' }}>
                         <button
-                            onClick={() => {
-                                // Logic: Update(-1) removes 1 unit.
-                                updatePendingInventory(beer, subtype, -1);
-                            }}
-                            style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#F3F4F6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            onClick={() => updatePendingInventory(beer, subtype, emission, -1)}
+                            style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'var(--bg-card-hover)', border: '1px solid var(--accent-light)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         >
-                            <Minus size={18} color="#4B5563" />
+                            <Minus size={22} color="var(--text-primary)" />
                         </button>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                            <span style={{ fontSize: '0.7rem', color: '#999', fontWeight: 600 }}>
-                                {isRemove ? 'RETIRAR' : 'AGREGAR'}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '0 1rem', minWidth: '80px' }}>
+                            <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', marginBottom: '2px', letterSpacing: '0.5px' }}>
+                                {isNegative ? 'RETIRAR' : 'AGREGAR'}
                             </span>
-                            <span style={{ fontSize: '1.2rem', fontWeight: 700, color: pending < 0 ? '#EF4444' : '#000', minWidth: '40px', textAlign: 'center' }}>
-                                {pending}
+                            <span style={{ fontSize: '1.5rem', fontWeight: 800, color: activeColor, textAlign: 'center' }}>
+                                {Math.abs(pendingCount)}
                             </span>
                         </div>
 
                         <button
-                            onClick={() => updatePendingInventory(beer, subtype, 1)}
-                            style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#F3F4F6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            onClick={() => updatePendingInventory(beer, subtype, emission, 1)}
+                            style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'var(--bg-card-hover)', border: '1px solid var(--accent-light)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         >
-                            <Plus size={18} color="#4B5563" />
+                            <Plus size={22} color="var(--text-primary)" />
                         </button>
-                    </div>
-
-                    {/* Quick Add Buttons (Solo CAJAS) */}
-                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        {Array.isArray(emissionOptions) && emissionOptions.map(emissionName => {
-                            // SKIP "Unidad" as it's the default main input
-                            if (emissionName === 'Unidad') return null;
-
-                            // FILTRO AÑADIDO: Solo permitir 'Caja'
-                            if (emissionName !== 'Caja') return null;
-
-                            const amount = getUnitsPerEmission(emissionName, subtype);
-                            // Safe check: ensure amount is a number and > 1
-                            if (!amount || amount <= 1) return null;
-
-                            // If mode is remove, quick button removes a box
-                            const clickAmount = isRemove ? -amount : amount;
-
-                            return (
-                                <button
-                                    key={emissionName}
-                                    onClick={() => updatePendingInventory(beer, subtype, clickAmount)}
-                                    style={{
-                                        fontSize: '0.8rem',
-                                        padding: '8px 12px',
-                                        background: isRemove ? '#FEF2F2' : '#e0f2fe',
-                                        color: isRemove ? '#991B1B' : '#0369a1',
-                                        border: isRemove ? '1px solid #FECACA' : '1px solid #bae6fd',
-                                        borderRadius: '8px',
-                                        cursor: 'pointer',
-                                        fontWeight: 600,
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        lineHeight: 1.2,
-                                        minWidth: '80px'
-                                    }}
-                                >
-                                    <span>{isRemove ? '-' : '+'}1 {emissionName}</span>
-                                    <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>({amount} Uds)</span>
-                                </button>
-                            );
-                        })}
                     </div>
                 </div>
             </div>
         );
     };
 
-    // Calculate Summary Data
-    const summaryItems = Object.entries(pendingInventory).map(([key, count]) => {
-        if (count === 0) return null;
-        const [beer, subtype] = key.split('_');
+    // Summary Items (Only for normal inventory)
+    const summaryItems = [];
+    Object.entries(pendingInventory || {}).forEach(([key, count]) => {
+        if (count === 0) return;
+        const parts = key.split('_');
+        const emission = parts.pop();
+        const subtype = parts.pop();
+        const beer = parts.join('_');
+        summaryItems.push({ beer, subtype, emission, count });
+    });
 
-        let bestEmission = 'Caja';
-        let unitsPerBest = getUnitsPerEmission('Caja', subtype);
-
-        if (unitsPerBest <= 1) {
-            const validEmissions = Array.isArray(emissionOptions)
-                ? emissionOptions.filter(e => getUnitsPerEmission(e, subtype) > 1)
-                : [];
-            if (validEmissions.length > 0) {
-                validEmissions.sort((a, b) => getUnitsPerEmission(b, subtype) - getUnitsPerEmission(a, subtype));
-                bestEmission = validEmissions[0];
-                unitsPerBest = getUnitsPerEmission(bestEmission, subtype);
-            }
-        }
-
-        const displayUnits = unitsPerBest > 1 ? (count / unitsPerBest).toFixed(1) : 0;
-
-        return { beer, subtype, count, displayUnits, bestEmission, unitsPerBest };
-    }).filter(Boolean);
-
-    // Render History Item helper
     const renderMovement = (mov) => {
-        const unitsPerCaja = getUnitsPerEmission('Caja', mov.subtype);
-        let extraInfo = '';
-        if (unitsPerCaja > 1) {
-            const cajas = (Math.abs(mov.quantity) / unitsPerCaja).toFixed(1);
-            const formattedCajas = cajas.endsWith('.0') ? cajas.slice(0, -2) : cajas;
-            extraInfo = `${formattedCajas} Cajas`;
-        }
         const isNegative = mov.quantity < 0;
+        // Check if type is waste OR if it comes from a breakage report context (heuristic)
+        // But the 'mov' object inside breakageHistory usually has 'type' or just quantity. 
+        // Our 'reportWaste' in ProductContext sets type='WASTE' on the REPORT, not always on the movement.
+        // But let's check the report type if passed, or infer.
+        // Actually, renderMovement takes 'mov'.
+        // Let's assume 'mov' structure from ProductContext: { beer, subtype, emission, quantity, totalUnits }
+        // We can pass an extra flag if needed, but for now relying on styling in the parent map is safer.
+        // Or we just check logic.
+
         return (
-            <div key={mov.beer + mov.subtype} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.25rem' }}>
-                <span style={{ color: '#333' }}>
-                    {mov.beer} {mov.subtype}
-                    {extraInfo && <span style={{ color: '#888', marginLeft: '6px', fontSize: '0.75rem' }}>({extraInfo})</span>}
+            <div key={Math.random()} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.25rem' }}>
+                <span style={{ color: 'var(--text-primary)' }}>
+                    {mov.beer} {mov.subtype} ({mov.emission})
                 </span>
-                <span style={{ fontWeight: 600, color: isNegative ? '#EF4444' : '#34c759' }}>
-                    {isNegative ? '' : '+'}{mov.quantity}
+                <span style={{ fontWeight: 600, color: '#34c759' }}>
+                    {/* For normal inventory, negative is red. For waste, it's implicitly negative stock but positive count. 
+                        Let's handle this in the parent container styling mainly.
+                        Here we just show the QTY.
+                     */}
+                    {mov.quantity > 0 ? '+' : ''}{mov.quantity}
                 </span>
             </div>
         );
@@ -202,10 +193,9 @@ export default function StockManager() {
 
     return (
         <div className="stock-manager-container" style={{ paddingBottom: '120px' }}>
-
             <div style={{ marginBottom: '1.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                    <h3 className="section-title text-lg font-bold" style={{ color: '#111827', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                    <h3 className="section-title text-lg font-bold" style={{ color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
                         <Box size={20} />
                         Gestión de Inventario
                     </h3>
@@ -213,8 +203,8 @@ export default function StockManager() {
                         onClick={() => setHistoryOpen(true)}
                         style={{
                             padding: '8px 12px',
-                            background: '#f1f5f9',
-                            border: '1px solid #e2e8f0',
+                            background: 'var(--bg-card-hover)',
+                            border: '1px solid var(--accent-light)',
                             borderRadius: '12px',
                             color: '#475569',
                             fontSize: '0.85rem',
@@ -225,68 +215,27 @@ export default function StockManager() {
                         Historial
                     </button>
                 </div>
-
-                {/* MODE TOGGLE */}
-                <div style={{ background: '#f3f4f6', padding: '4px', borderRadius: '12px', display: 'flex' }}>
-                    <button
-                        onClick={() => setMode('add')}
-                        style={{
-                            flex: 1,
-                            padding: '8px',
-                            borderRadius: '8px',
-                            border: 'none',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            background: mode === 'add' ? 'white' : 'transparent',
-                            color: mode === 'add' ? '#166534' : '#6b7280',
-                            boxShadow: mode === 'add' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
-                            transition: 'all 0.2s'
-                        }}
-                    >
-                        Entrada (Agregar)
-                    </button>
-                    <button
-                        onClick={() => setMode('remove')}
-                        style={{
-                            flex: 1,
-                            padding: '8px',
-                            borderRadius: '8px',
-                            border: 'none',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            background: mode === 'remove' ? 'white' : 'transparent',
-                            color: mode === 'remove' ? '#991B1B' : '#6b7280',
-                            boxShadow: mode === 'remove' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
-                            transition: 'all 0.2s',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
-                        }}
-                    >
-                        <Trash2 size={16} /> Salida (Retirar)
-                    </button>
-                </div>
             </div>
 
             <div className="stock-grid" style={{ display: 'grid', gap: '1rem' }}>
                 {Array.isArray(beerTypes) && beerTypes.map(beer => {
                     const isExpanded = expandedSections[beer];
-                    const pendingForBeer = Object.entries(pendingInventory).reduce((sum, [key, val]) => {
-                        return key.startsWith(beer + '_') ? sum + val : sum;
-                    }, 0);
+                    const hasPending = Object.keys(pendingInventory).some(k => k.startsWith(beer + '_'));
+                    const activeSubtype = beerSubtypes[beer] || 'Botella';
 
                     return (
                         <div key={beer} className="beer-stock-card" style={{
-                            background: 'white', borderRadius: '16px',
-                            border: '1px solid #e5e7eb',
+                            background: 'var(--bg-card)', borderRadius: '16px',
+                            border: '1px solid var(--accent-light)',
                             overflow: 'hidden',
                             boxShadow: '0 2px 4px rgba(0,0,0,0.03)'
                         }}>
-                            {/* Collapsible Header */}
                             <div
                                 onClick={() => toggleSection(beer)}
                                 style={{
                                     padding: '0.75rem 1rem',
-                                    background: '#f9fafb',
-                                    borderBottom: isExpanded ? '1px solid #e5e7eb' : 'none',
+                                    background: 'var(--bg-card-hover)',
+                                    borderBottom: isExpanded ? '1px solid var(--accent-light)' : 'none',
                                     fontWeight: 700,
                                     fontSize: '1rem',
                                     display: 'flex',
@@ -297,153 +246,197 @@ export default function StockManager() {
                             >
                                 <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                     {beer}
-                                    {pendingForBeer !== 0 && !isExpanded && (
-                                        <span style={{
-                                            fontSize: '0.75rem',
-                                            background: pendingForBeer > 0 ? '#dcfce7' : '#fee2e2',
-                                            color: pendingForBeer > 0 ? '#166534' : '#991b1b',
-                                            padding: '2px 8px',
-                                            borderRadius: '12px'
-                                        }}>
-                                            {pendingForBeer > 0 ? '+' : ''}{pendingForBeer}
-                                        </span>
+                                    {hasPending && !isExpanded && (
+                                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#F59E0B' }} />
                                     )}
                                 </span>
                                 {isExpanded ? <ChevronUp size={20} color="#9ca3af" /> : <ChevronDown size={20} color="#9ca3af" />}
                             </div>
 
-                            {/* Content */}
-                            {isExpanded && (!emissionOptions || emissionOptions.length === 0 ? (
-                                <div style={{ padding: '1rem', textAlign: 'center', color: '#666' }}>No hay tipos de emisión configurados.</div>
-                            ) : (
-                                <div>
-                                    {emissionOptions.map(emission => {
-                                        if (emission === 'Unidad' || emission === 'Libre') return null;
-
-                                        return (
+                            {isExpanded && (
+                                <div style={{ padding: '1rem ' }}>
+                                    <div style={{ marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                        <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 500 }}>Configurar para:</label>
+                                        <ContainerSelector
+                                            value={activeSubtype}
+                                            onChange={(val) => handleSubtypeChange(beer, val)}
+                                        />
+                                    </div>
+                                    <div>
+                                        {['Caja', 'Unidad'].map(emission => (
                                             <StockRow
-                                                key={`${beer}-${emission}`}
+                                                key={`${beer}-${emission}-${activeSubtype}`}
                                                 beer={beer}
-                                                subtype={emission}
-                                                icon={emission && typeof emission === 'string' && emission.toLowerCase().includes('lata') ? Box : Package}
+                                                subtype={activeSubtype}
+                                                emission={emission}
+                                                icon={emission === 'Caja' ? Package : Layers}
                                             />
-                                        );
-                                    })}
+                                        ))}
+                                    </div>
                                 </div>
-                            ))}
+                            )}
                         </div>
                     );
                 })}
             </div>
 
-            {/* NEW SUMMARY SECTION */}
+            {/* SUMMARY SECTION */}
             {summaryItems.length > 0 && (
                 <div className="inventory-summary" style={{
                     marginTop: '2rem',
-                    background: '#111827',
+                    background: 'var(--bg-card-active)',
                     borderRadius: '16px',
                     padding: '1.5rem',
-                    color: 'white',
-                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+                    color: 'var(--text-primary)',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                    border: '1px solid var(--accent-light)'
                 }}>
-                    <h4 style={{ fontSize: '1.1rem', marginBottom: '1rem', borderBottom: '1px solid #374151', paddingBottom: '0.5rem' }}>
-                        Resumen de {mode === 'remove' ? 'Retiro' : 'Carga'}
+                    <h4 style={{ fontSize: '1.1rem', marginBottom: '1rem', borderBottom: '1px solid var(--accent-light)', paddingBottom: '0.5rem' }}>
+                        Resumen de Movimientos
                     </h4>
-
                     <div style={{ display: 'grid', gap: '0.75rem' }}>
                         {summaryItems.map((item, idx) => (
                             <div key={idx} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', alignItems: 'center', fontSize: '0.9rem' }}>
                                 <div style={{ fontWeight: 500 }}>
                                     {item.beer} <span style={{ opacity: 0.7, fontSize: '0.8rem' }}>{item.subtype}</span>
                                 </div>
-                                <div style={{ textAlign: 'right', fontWeight: 400, color: '#9CA3AF' }}>
-                                    {item.count} Uds
-                                </div>
+                                <div style={{ textAlign: 'right', fontWeight: 400, color: '#9CA3AF' }}></div>
                                 <div style={{ textAlign: 'right', fontWeight: 700, color: item.count < 0 ? '#EF4444' : '#34D399' }}>
-                                    {item.displayUnits != 0 ? `${item.displayUnits} ${item.bestEmission}s` : '-'}
+                                    {item.count > 0 ? '+' : ''}{item.count} {item.emission}
                                 </div>
                             </div>
                         ))}
                     </div>
-
-                    <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid #374151', textAlign: 'center', fontSize: '0.8rem', color: '#9CA3AF' }}>
-                        Confirmar cambios con el botón flotante.
-                    </div>
                 </div>
             )}
 
-            {/* History Modal */}
+            {/* DEDICATED WASTE SECTION (Fixed Collapsible at Bottom) */}
+            <div style={{ marginTop: '2rem', marginBottom: '5rem', border: '1px solid var(--accent-light)', borderRadius: '16px', overflow: 'hidden' }}>
+                <div
+                    onClick={() => setWasteSectionOpen(!wasteSectionOpen)}
+                    style={{
+                        background: 'rgba(239, 68, 68, 0.1)', // Red tint that works on dark/light
+                        padding: '1rem',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        cursor: 'pointer',
+                        color: '#EF4444' // Standard Red
+                    }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <Trash2 size={20} />
+                        <span style={{ fontWeight: 700, fontSize: '1rem' }}>Mermas / Daños Recientes</span>
+                    </div>
+                    {wasteSectionOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                </div>
+
+                {wasteSectionOpen && (
+                    <div style={{ background: 'var(--bg-card)', padding: '1rem' }}>
+                        {recentWaste.length === 0 ? (
+                            <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '1rem', fontStyle: 'italic' }}>
+                                No hay reportes de merma recientes.
+                            </p>
+                        ) : (
+                            recentWaste.map(report => (
+                                <div key={report.id} style={{
+                                    marginBottom: '0.75rem',
+                                    paddingBottom: '0.75rem',
+                                    borderBottom: '1px solid var(--accent-light)',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center'
+                                }}>
+                                    <div>
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                            {report.timestamp}
+                                        </div>
+                                        <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                                            {report.movements[0]?.beer} ({report.movements[0]?.subtype})
+                                        </div>
+                                    </div>
+                                    <div style={{
+                                        color: '#EF4444',
+                                        fontWeight: 700,
+                                        background: 'rgba(239, 68, 68, 0.1)',
+                                        padding: '4px 8px',
+                                        borderRadius: '8px',
+                                        fontSize: '0.85rem'
+                                    }}>
+                                        -{report.totalUnits} Uds
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                        <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
+                            Reporta mermas desde la pantalla de Ventas &gt; Pendientes.
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* UNIFIED HISTORY MODAL */}
             {historyOpen && (
                 <div style={{
                     position: 'fixed',
                     top: 0, left: 0, right: 0, bottom: 0,
                     background: 'rgba(0,0,0,0.5)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 2000,
-                    backdropFilter: 'blur(2px)',
-                    padding: '1rem'
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    zIndex: 2000, backdropFilter: 'blur(2px)', padding: '1rem'
                 }}>
                     <div style={{
-                        background: 'white',
-                        borderRadius: '24px',
-                        width: '100%',
-                        maxWidth: '400px',
-                        maxHeight: '80vh',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        overflow: 'hidden',
+                        background: 'var(--bg-card)', borderRadius: '24px',
+                        width: '100%', maxWidth: '400px', maxHeight: '80vh',
+                        display: 'flex', flexDirection: 'column', overflow: 'hidden',
                         boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
                     }}>
-                        <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Historial de Movimientos</h3>
-                            <button onClick={() => setHistoryOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
+                        <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--accent-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)' }}>Historial Completo</h3>
+                            <button onClick={() => setHistoryOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-primary)' }}>&times;</button>
                         </div>
-
-                        <div style={{ padding: '1rem', overflowY: 'auto', background: '#f8fafc' }}>
-                            {inventoryHistory.length === 0 ? (
+                        <div style={{ padding: '1rem', overflowY: 'auto', background: 'var(--bg-app)' }}>
+                            {allHistory.length === 0 ? (
                                 <p style={{ textAlign: 'center', color: '#94a3b8', marginTop: '2rem' }}>No hay registros recientes.</p>
                             ) : (
-                                inventoryHistory.map((report) => (
-                                    <div key={report.id} style={{
-                                        background: 'white',
-                                        borderRadius: '12px',
-                                        padding: '1rem',
-                                        marginBottom: '0.8rem',
-                                        border: '1px solid #e2e8f0'
-                                    }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                                            <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1e293b' }}>
-                                                {report.timestamp}
-                                            </span>
-                                            <span style={{
-                                                background: report.totalUnits < 0 ? '#FEE2E2' : '#e0f2fe',
-                                                color: report.totalUnits < 0 ? '#991B1B' : '#0284c7',
-                                                fontSize: '0.75rem', padding: '2px 8px', borderRadius: '10px', fontWeight: 600
-                                            }}>
-                                                {report.totalUnits > 0 ? '+' : ''}{report.totalUnits} Uds
-                                            </span>
+                                allHistory.map((report) => {
+                                    const isWaste = report.type === 'WASTE';
+                                    return (
+                                        <div key={report.id} style={{
+                                            background: 'var(--bg-card)', borderRadius: '12px', padding: '1rem',
+                                            marginBottom: '0.8rem', border: '1px solid var(--accent-light)',
+                                            borderLeft: isWaste ? '4px solid #BE123C' : '4px solid var(--accent)'
+                                        }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                                <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)' }}>{report.timestamp}</span>
+                                                <span style={{
+                                                    background: isWaste ? '#FFE4E6' : (report.totalUnits < 0 ? '#FEE2E2' : '#e0f2fe'),
+                                                    color: isWaste ? '#BE123C' : (report.totalUnits < 0 ? '#991B1B' : '#0284c7'),
+                                                    fontSize: '0.75rem', padding: '2px 8px', borderRadius: '10px', fontWeight: 600
+                                                }}>
+                                                    {isWaste ? 'MERMA' : (report.totalUnits > 0 ? '+' : '') + report.totalUnits + ' Uds'}
+                                                </span>
+                                            </div>
+                                            <div style={{ borderTop: '1px solid var(--accent-light)', paddingTop: '0.5rem' }}>
+                                                {report.movements.map(m => (
+                                                    <div key={Math.random()} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.25rem' }}>
+                                                        <span style={{ color: 'var(--text-primary)' }}>{m.beer} {m.subtype} ({m.emission})</span>
+                                                        <span style={{ fontWeight: 600, color: isWaste || m.quantity < 0 ? '#EF4444' : '#34c759' }}>
+                                                            {isWaste ? '-' : (m.quantity > 0 ? '+' : '')}{m.quantity}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
-                                        <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem' }}>
-                                            {report.movements.map(m => renderMovement(m))}
-                                        </div>
-                                    </div>
-                                ))
+                                    );
+                                })
                             )}
                         </div>
-
-                        <div style={{ padding: '1rem', borderTop: '1px solid #eee', background: 'white' }}>
-                            <button
-                                onClick={() => setHistoryOpen(false)}
-                                style={{ width: '100%', padding: '12px', borderRadius: '12px', background: '#000', color: 'white', border: 'none', fontWeight: 600, cursor: 'pointer' }}
-                            >
-                                Cerrar
-                            </button>
+                        <div style={{ padding: '1rem', borderTop: '1px solid var(--accent-light)', background: 'var(--bg-card)' }}>
+                            <button onClick={() => setHistoryOpen(false)} style={{ width: '100%', padding: '12px', borderRadius: '12px', background: 'var(--accent)', color: 'var(--bg-card)', border: 'none', fontWeight: 600, cursor: 'pointer' }}>Cerrar</button>
                         </div>
                     </div>
                 </div>
             )}
-        </div>
+        </div >
     );
 }

@@ -1,17 +1,17 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400&display=swap');
 
 :root {
-  /* Colors */
+  /* Colors - Light Default */
   --bg-app: #f5f5f7;
   --bg-card: #ffffff;
   --bg-card-hover: #f9fafb;
+  --bg-input: #ffffff;
 
   --text-primary: #1a1a1a;
   --text-secondary: #8e8e93;
   --text-muted: #c7c7cc;
 
   --accent: #000000;
-  /* Sophisticated black/dark gray */
   --accent-light: #e5e5ea;
 
   /* Shadows */
@@ -19,7 +19,6 @@
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   --shadow-soft: 0 20px 40px rgba(0, 0, 0, 0.08);
-  /* More premium soft shadow */
 
   /* Radius */
   --radius-sm: 0.5rem;
@@ -30,6 +29,32 @@
   /* Transitions */
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Dark Mode Overrides */
+/* Dark Mode Overrides */
+.dark {
+  --bg-app: #000000;
+  /* Deep black for OLED/High contrast */
+  --bg-card: #1c1c1e;
+  /* Dark gray for cards */
+  --bg-card-hover: #2c2c2e;
+  --bg-input: #2c2c2e;
+  /* Slightly lighter for inputs */
+
+  --text-primary: #ffffff;
+  --text-secondary: #e2e2e2;
+  /* Lighter secondary for better readability against dark */
+  --text-muted: #a1a1aa;
+
+  --accent: #ffffff;
+  --accent-light: #3a3a3c;
+
+  /* Adjust shadows for dark mode visibility (often lighter/glowy or just subtler) */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  --shadow-soft: 0 20px 40px rgba(0, 0, 0, 0.6);
 }
 
 * {
@@ -87,4 +112,49 @@ button {
 
 .font-medium {
   font-weight: 500;
+}
+
+/* Color Utilities */
+.text-primary {
+  color: var(--text-primary);
+}
+
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+/* Global Layout Utilities */
+.page-container {
+  padding: 2rem;
+  background-color: var(--bg-app);
+  min-height: 100vh;
+  transition: background-color var(--transition-smooth);
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 640px) {
+  .page-container {
+    padding: 1rem;
+  }
+}
+
+/* Utility to hide number spinners */
+input[type=number].no-spin::-webkit-inner-spin-button,
+input[type=number].no-spin::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type=number].no-spin {
+  -moz-appearance: textfield;
 }

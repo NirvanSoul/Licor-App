@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
+// import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import { UserCheck, Lock, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -25,6 +25,13 @@ export default function CompleteRegistration() {
         setLoading(true);
         setError('');
 
+        // MOCK COMPLETE
+        setTimeout(() => {
+            alert('¡Cuenta configurada con éxito!');
+            navigate('/');
+        }, 1000);
+
+        /*
         try {
             if (!user) throw new Error("No hay sesión activa. Por favor usa el enlace de tu correo nuevamente.");
 
@@ -61,6 +68,7 @@ export default function CompleteRegistration() {
         } finally {
             setLoading(false);
         }
+        */
     };
 
     return (

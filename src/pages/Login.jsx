@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { supabase } from '../supabaseClient';
+// import { supabase } from '../supabaseClient';
 import { useNavigate, Link } from 'react-router-dom';
 import { LogIn, Eye, EyeOff } from 'lucide-react';
 
@@ -17,6 +16,12 @@ export default function Login() {
         setLoading(true);
         setError('');
 
+        // Mock Login for local mode
+        setTimeout(() => {
+            navigate('/vender');
+        }, 1000);
+
+        /*
         const { error } = await supabase.auth.signInWithPassword({
             email,
             password,
@@ -29,6 +34,7 @@ export default function Login() {
             // Context will pick up the change
             navigate('/vender'); // Default redirect
         }
+        */
     };
 
     return (

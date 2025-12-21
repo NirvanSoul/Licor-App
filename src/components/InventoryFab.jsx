@@ -1,23 +1,52 @@
 import React, { useState } from 'react';
 import { useProduct } from '../context/ProductContext';
-import { Package, CheckCircle } from 'lucide-react';
+import { Package, CheckCircle, Trash2 } from 'lucide-react';
 
 export default function InventoryFab() {
-    const { pendingInventory, commitInventory, clearPendingInventory, getUnitsPerEmission } = useProduct();
+    const {
+        pendingInventory, commitInventory, clearPendingInventory, getUnitsPerEmission,
+        pendingWaste = {}, commitWaste = async () => ({}), clearPendingWaste = () => { }
+    } = useProduct();
+
     const [showSummary, setShowSummary] = useState(false);
-    const [showConfirm, setShowConfirm] = useState(false); // NEW: Confirmation state
+    const [showConfirm, setShowConfirm] = useState(false);
     const [lastReport, setLastReport] = useState(null);
 
-    const totalItems = Object.values(pendingInventory || {}).reduce((a, b) => a + b, 0);
+    // Calculate Total Units (Weighted)
+    const totalInventoryItems = Object.entries(pendingInventory || {}).reduce((sum, [key, count]) => {
+        const parts = key.split('_');
+        const emission = parts.pop();
+        const subtype = parts.pop();
+        const units = getUnitsPerEmission(emission, subtype);
+        return sum + (count * units);
+    }, 0);
 
-    if (totalItems === 0 && !showSummary && !showConfirm) return null;
+    const totalWasteItems = Object.entries(pendingWaste || {}).reduce((sum, [key, count]) => {
+        const parts = key.split('_');
+        const emission = parts.pop();
+        const subtype = parts.pop();
+        const units = getUnitsPerEmission(emission, subtype);
+        return sum + (count * units);
+    }, 0);
+
+    // Determine active mode based on what has pending items
+    // Priority: Waste takes precedence if both exist (or logic to handle both? For now let's handle one at a time visually)
+    const isWasteAction = totalWasteItems > 0;
+    const activeTotal = isWasteAction ? totalWasteItems : totalInventoryItems;
+
+    if (activeTotal === 0 && !showSummary && !showConfirm) return null;
 
     const handleClick = () => {
         setShowConfirm(true);
     };
 
-    const handleConfirm = () => {
-        const report = commitInventory();
+    const handleConfirm = async () => {
+        let report;
+        if (isWasteAction) {
+            report = await commitWaste();
+        } else {
+            report = await commitInventory();
+        }
         setLastReport(report);
         setShowConfirm(false);
         setShowSummary(true);
@@ -27,6 +56,12 @@ export default function InventoryFab() {
         setShowConfirm(false);
     };
 
+    const handleDiscard = () => {
+        if (isWasteAction) clearPendingWaste();
+        else clearPendingInventory();
+        setShowConfirm(false);
+    }
+
     const handleClose = () => {
         setShowSummary(false);
         setLastReport(null);
@@ -35,19 +70,21 @@ export default function InventoryFab() {
     return (
         <>
             {/* Extended FAB with Text when items actice */}
-            {totalItems !== 0 && !showSummary && !showConfirm && (
+            {activeTotal !== 0 && !showSummary && !showConfirm && (
                 <button
                     onClick={handleClick}
                     style={{
                         position: 'fixed',
                         bottom: '120px',
                         right: '1rem',
-                        background: 'linear-gradient(180deg, #FF9C57 0%, #E65900 100%)',
+                        background: isWasteAction
+                            ? 'linear-gradient(180deg, #F97316 0%, #EA580C 100%)'
+                            : 'linear-gradient(180deg, #FF9C57 0%, #E65900 100%)',
                         color: 'white',
                         padding: '12px 20px',
                         borderRadius: '50px',
                         border: 'none',
-                        boxShadow: '0 8px 20px rgba(255, 156, 87, 0.4)',
+                        boxShadow: isWasteAction ? '0 8px 20px rgba(234, 88, 12, 0.4)' : '0 8px 20px rgba(255, 156, 87, 0.4)',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '12px',
@@ -58,23 +95,23 @@ export default function InventoryFab() {
                     }}
                 >
                     <div style={{ position: 'relative' }}>
-                        <Package size={24} />
+                        {isWasteAction ? <Trash2 size={24} /> : <Package size={24} />}
                         <span style={{
                             position: 'absolute',
                             top: '-8px',
                             right: '-8px',
                             background: '#fff',
-                            color: '#E65900',
+                            color: isWasteAction ? '#EA580C' : '#E65900',
                             fontWeight: 'bold',
                             fontSize: '0.7rem',
                             padding: '2px 6px',
                             borderRadius: '10px',
                             boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                         }}>
-                            {totalItems}
+                            {activeTotal}
                         </span>
                     </div>
-                    <span>Guardar Inventario</span>
+                    <span>{isWasteAction ? 'Confirmar Merma' : 'Guardar Inventario'}</span>
                 </button>
             )}
 
@@ -92,19 +129,23 @@ export default function InventoryFab() {
                     padding: '1rem'
                 }}>
                     <div style={{
-                        background: 'white',
+                        background: 'var(--bg-card)',
                         borderRadius: '24px',
                         padding: '1.5rem',
                         width: '100%',
                         maxWidth: '320px',
                         textAlign: 'center',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        color: 'var(--text-primary)'
                     }}>
-                        <h3 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '0.5rem', color: '#111827' }}>
-                            ¿Guardar Inventario?
+                        <h3 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
+                            {isWasteAction ? '¿Reportar Merma?' : '¿Guardar Inventario?'}
                         </h3>
-                        <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-                            Estás a punto de actualizar el stock con {totalItems} unidades.
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+                            {isWasteAction
+                                ? `Estás reportando ${activeTotal} unidades dañadas/rotas. Se descontarán del inventario.`
+                                : `Estás a punto de actualizar el stock con ${activeTotal} unidades.`
+                            }
                         </p>
                         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
                             <button
@@ -113,8 +154,8 @@ export default function InventoryFab() {
                                     flex: 1,
                                     padding: '12px',
                                     borderRadius: '12px',
-                                    background: '#f3f4f6',
-                                    color: '#4b5563',
+                                    background: 'var(--bg-input)',
+                                    color: 'var(--text-secondary)',
                                     border: 'none',
                                     fontWeight: 600,
                                     cursor: 'pointer'
@@ -128,7 +169,7 @@ export default function InventoryFab() {
                                     flex: 1,
                                     padding: '12px',
                                     borderRadius: '12px',
-                                    background: 'linear-gradient(180deg, #FF9C57 0%, #E65900 100%)',
+                                    background: isWasteAction ? 'linear-gradient(180deg, #F97316 0%, #EA580C 100%)' : 'linear-gradient(180deg, #FF9C57 0%, #E65900 100%)',
                                     color: 'white',
                                     border: 'none',
                                     fontWeight: 600,
@@ -140,10 +181,7 @@ export default function InventoryFab() {
                             </button>
                         </div>
                         <button
-                            onClick={() => {
-                                clearPendingInventory();
-                                setShowConfirm(false);
-                            }}
+                            onClick={handleDiscard}
                             style={{
                                 background: 'none',
                                 border: 'none',
@@ -175,13 +213,14 @@ export default function InventoryFab() {
                     padding: '1rem'
                 }}>
                     <div style={{
-                        background: 'white',
+                        background: 'var(--bg-card)',
                         borderRadius: '24px',
                         padding: '1.5rem',
                         width: '100%',
                         maxWidth: '360px',
                         textAlign: 'center',
-                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        color: 'var(--text-primary)'
                     }}>
                         {/* Gradient Definition */}
                         <svg width="0" height="0" style={{ position: 'absolute' }}>
@@ -204,39 +243,35 @@ export default function InventoryFab() {
                             <CheckCircle size={32} style={{ stroke: 'url(#inventory-gradient)' }} />
                         </div>
 
-                        <h3 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '0.5rem', color: '#111827' }}>
-                            {lastReport.totalUnits < 0 ? '¡Descargo Exitoso!' : '¡Carga Exitosa!'}
+                        <h3 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
+                            {isWasteAction ? '¡Merma Registrada!' : (lastReport.totalUnits < 0 ? '¡Descargo Exitoso!' : '¡Carga Exitosa!')}
                         </h3>
-                        <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-                            {lastReport.totalUnits < 0
-                                ? `Has descargado ${Math.abs(lastReport.totalUnits)} unidades del inventario.`
-                                : 'Se ha actualizado el inventario correctamente.'}
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+                            {isWasteAction
+                                ? 'Se ha descontado el producto dañado del inventario.'
+                                : (lastReport.totalUnits < 0
+                                    ? `Has descargado ${Math.abs(lastReport.totalUnits)} unidades del inventario.`
+                                    : 'Se ha actualizado el inventario correctamente.')
+                            }
                         </p>
 
-                        <div style={{ background: '#f9fafb', borderRadius: '16px', padding: '1rem', marginBottom: '1.5rem', textAlign: 'left' }}>
-                            <div style={{ fontSize: '0.75rem', color: '#999', marginBottom: '0.5rem', borderBottom: '1px solid #eee', paddingBottom: '0.5rem' }}>
-                                REPORTE DE MOVIMIENTOS
+                        <div style={{ background: 'var(--bg-input)', borderRadius: '16px', padding: '1rem', marginBottom: '1.5rem', textAlign: 'left' }}>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem', borderBottom: '1px solid var(--accent-light)', paddingBottom: '0.5rem' }}>
+                                REPORTE DE {isWasteAction ? 'MERMA' : 'MOVIMIENTOS'}
                             </div>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '200px', overflowY: 'auto' }}>
                                 {lastReport.movements.map((mov, idx) => {
-                                    // Calculate Boxes for display
-                                    const unitsPerCaja = getUnitsPerEmission('Caja', mov.subtype);
-                                    let extraInfo = '';
-                                    if (unitsPerCaja > 1) {
-                                        const cajas = (Math.abs(mov.quantity) / unitsPerCaja).toFixed(1); // 1 decimal if needed
-                                        // Pretty format: if .0 remove it
-                                        const formattedCajas = cajas.endsWith('.0') ? cajas.slice(0, -2) : cajas;
-                                        extraInfo = `${formattedCajas} Cajas`;
-                                    }
+                                    // FIXED: Display the emission name directly (e.g. "Cajas") instead of trying to calculate fractions
+                                    const extraInfo = mov.emission;
 
                                     return (
                                         <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', alignItems: 'center' }}>
                                             <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                <span style={{ fontWeight: 500, color: '#333' }}>{mov.beer} {mov.subtype}</span>
-                                                {extraInfo && <span style={{ fontSize: '0.75rem', color: '#666' }}>{extraInfo}</span>}
+                                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{mov.beer} {mov.subtype}</span>
+                                                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{extraInfo}</span>
                                             </div>
-                                            <span style={{ fontWeight: 700, color: mov.quantity < 0 ? '#EF4444' : '#34c759' }}>
+                                            <span style={{ fontWeight: 700, color: (mov.quantity < 0 || isWasteAction) ? '#EF4444' : '#34c759' }}>
                                                 {mov.quantity > 0 ? '+' : ''}{mov.quantity}
                                             </span>
                                         </div>
@@ -244,13 +279,13 @@ export default function InventoryFab() {
                                 })}
                             </div>
 
-                            <div style={{ borderTop: '1px solid #eee', marginTop: '0.5rem', paddingTop: '0.5rem', display: 'flex', justifyContent: 'space-between', fontWeight: 800 }}>
-                                <span>Total Unidades</span>
-                                <span style={{ color: lastReport.totalUnits < 0 ? '#EF4444' : 'inherit' }}>
+                            <div style={{ borderTop: '1px solid var(--accent-light)', marginTop: '0.5rem', paddingTop: '0.5rem', display: 'flex', justifyContent: 'space-between', fontWeight: 800 }}>
+                                <span style={{ color: 'var(--text-primary)' }}>Total Unidades</span>
+                                <span style={{ color: (lastReport.totalUnits < 0 || isWasteAction) ? '#EF4444' : 'var(--text-primary)' }}>
                                     {lastReport.totalUnits > 0 ? '+' : ''}{lastReport.totalUnits}
                                 </span>
                             </div>
-                            <div style={{ fontSize: '0.7rem', color: '#ccc', marginTop: '0.5rem', textAlign: 'right' }}>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.5rem', textAlign: 'right' }}>
                                 {lastReport.timestamp}
                             </div>
                         </div>

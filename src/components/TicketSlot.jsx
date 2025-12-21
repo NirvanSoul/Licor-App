@@ -8,22 +8,7 @@ export default function TicketSlot({ content, onClick, isEmpty, count = 1, color
         return (
             <button
                 onClick={onClick}
-                style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: '#F9FAFB',
-                    border: '2px dashed #E5E7EB',
-                    borderRadius: '8px',
-                    padding: '0.5rem',
-                    cursor: 'pointer',
-                    fontSize: '0.75rem',
-                    color: '#9CA3AF',
-                    fontWeight: 600,
-                    height: '50px',
-                    transition: 'all 0.2s',
-                    width: '100%'
-                }}
+                className="ticket-slot-btn empty"
             >
                 Agregar
             </button>

@@ -17,8 +17,8 @@
 }
 
 .option-btn {
-    background-color: #ffffff;
-    border: 1px solid #e5e5ea;
+    background-color: var(--bg-card);
+    border: 1px solid var(--accent-light);
     padding: 1rem 0.5rem;
     border-radius: var(--radius-md);
     font-weight: 500;
@@ -30,14 +30,14 @@
 }
 
 .option-btn:hover {
-    border-color: #000;
+    border-color: var(--text-primary);
     transform: translateY(-1px);
 }
 
 .option-btn.selected {
-    background-color: #000000;
-    color: white;
-    border: 2px solid #000000;
+    background-color: var(--text-primary);
+    color: var(--bg-card);
+    border: 2px solid var(--text-primary);
     font-weight: 700;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
 }
@@ -45,7 +45,7 @@
 /* Toggle Switch Styles */
 .toggle-switch {
     display: flex;
-    background-color: #e5e5ea;
+    background-color: var(--accent-light);
     border-radius: var(--radius-full);
     padding: 2px;
     gap: 2px;
@@ -65,7 +65,7 @@
 
 .toggle-option.active {
     background-color: var(--text-primary);
-    color: white;
+    color: var(--bg-card);
     box-shadow: var(--shadow-sm);
 }
 
@@ -74,7 +74,7 @@
     margin-top: 2rem;
     border-radius: var(--radius-lg);
     padding: 2.5rem 1.5rem 1.5rem;
-    background-color: white;
+    background-color: var(--bg-card-hover);
     box-shadow: var(--shadow-soft);
     position: relative;
     overflow: hidden;
@@ -186,7 +186,7 @@
     width: 100%;
     margin-bottom: 1rem;
     padding: 0.75rem;
-    background-color: white;
+    background-color: var(--bg-card);
     border: 1px dashed var(--text-primary);
     border-radius: var(--radius-md);
     color: var(--text-primary);
@@ -200,7 +200,7 @@
 }
 
 .add-item-btn:hover:not(:disabled) {
-    background-color: #f5f5f7;
+    background-color: var(--bg-card-hover);
     border-style: solid;
 }
 
@@ -221,6 +221,15 @@
     -webkit-text-fill-color: transparent;
     background-clip: text;
     color: transparent;
+}
+
+.usd-price-text {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-style: italic;
+    font-family: 'Poppins', sans-serif;
+    margin-top: -5px;
 }
 
 /* Ticket Form Styles */
@@ -289,7 +298,7 @@
     flex: 1;
     width: 100%;
     padding: 1rem 1.25rem;
-    background-color: white;
+    background-color: var(--bg-input);
     border: 2px solid var(--text-primary);
     border-radius: var(--radius-full);
     font-size: 1.1rem;
@@ -307,6 +316,26 @@
 
 .ticket-input-large:focus {
     box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.1);
+}
+
+@media (max-width: 480px) {
+    .order-summary-card {
+        padding: 1.25rem 1rem !important;
+    }
+
+    .ticket-input-large {
+        padding: 0.8rem 1rem;
+        font-size: 1rem;
+    }
+
+    .option-btn {
+        padding: 0.75rem 0.4rem;
+        font-size: 0.85rem;
+    }
+
+    .summary-total {
+        font-size: 1.5rem;
+    }
 }
 
 /* Payment Section */
@@ -369,7 +398,7 @@
 }
 
 .modal-content {
-    background-color: white;
+    background-color: var(--bg-card);
     padding: 2rem;
     border-radius: var(--radius-lg);
     max-width: 90%;
@@ -403,7 +432,7 @@
 
 .modal-close-btn {
     margin-top: 1.5rem;
-    background-color: #f2f2f7;
+    background-color: var(--bg-app);
     color: var(--text-primary);
     border: none;
     padding: 0.75rem 2rem;
@@ -414,7 +443,7 @@
 }
 
 .modal-close-btn:hover {
-    background-color: #e5e5ea;
+    background-color: var(--bg-card-hover);
 }
 
 @keyframes fadeIn {

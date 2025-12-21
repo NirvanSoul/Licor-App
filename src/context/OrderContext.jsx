@@ -1,3 +1,4 @@
+// ... (Imports remain same)
 import React, { createContext, useContext, useState, useEffect } from 'react';
 // import { supabase } from '../supabaseClient'; 
 import { useAuth } from './AuthContext';
@@ -10,7 +11,7 @@ export const useOrder = () => useContext(OrderContext);
 
 export const OrderProvider = ({ children }) => {
     const { user, organizationId } = useAuth();
-    const { productMap } = useProduct();
+    const { productMap, checkStock, deductStock, addStock, getBsPrice, getPrice, getUnitsPerEmission } = useProduct();
 
     // Load from local storage
     const loadOrders = () => {
@@ -32,19 +33,37 @@ export const OrderProvider = ({ children }) => {
 
     // --- Actions ---
 
-    // Create a new Pending Ticket
-    const createOrder = (customerName, items, type = 'Local') => {
-        const newOrder = {
-            id: Date.now().toString(), // Simple ID
-            ticketNumber: Math.floor(1000 + Math.random() * 9000), // Random 4-digit
-            customerName: customerName || 'Cliente',
-            status: 'OPEN', // OPEN, PAID, CANCELLED
-            type, // 'Local' usually
-            createdAt: new Date().toISOString(),
-            items: items.map(item => ({
-                ...item,
+    const createOrder = (customerName, items = [], type = 'Local', paymentMethod = null) => {
+        let initialItems = (items || []).map(item => ({
+            ...item,
+            addedAt: new Date().toISOString(),
+            // Initialize slots for Variado logic if needed
+            slots: (item.beerVariety === 'Variado') ? [item.baseBeer || item.beerType || item.name] : []
+        }));
+
+        // If it's a "Carta Abierta" (Empty items, Local type), inject a session item
+        if (initialItems.length === 0 && type === 'Local') {
+            initialItems = [{
+                id: 'consumption-' + Date.now(),
+                name: 'Consumo',
+                beerVariety: 'Variado',
+                emission: 'Libre',
+                subtype: 'Botella',
+                quantity: 1,
+                slots: [],
                 addedAt: new Date().toISOString()
-            })),
+            }];
+        }
+
+        const newOrder = {
+            id: Date.now().toString(),
+            ticketNumber: Math.floor(1000 + Math.random() * 9000),
+            customerName: customerName || 'Cliente',
+            status: 'OPEN',
+            type,
+            paymentMethod, // Store the initial payment method
+            createdAt: new Date().toISOString(),
+            items: initialItems,
             payments: []
         };
 
@@ -52,127 +71,298 @@ export const OrderProvider = ({ children }) => {
         return newOrder;
     };
 
-    // Add items to an existing Open Ticket
-    const addItemToOrder = (orderId, item) => {
-        setPendingOrders(prev => prev.map(order => {
-            if (order.id === orderId) {
+    const addItemToOrder = async (orderId, item) => {
+        const order = pendingOrders.find(o => o.id === orderId);
+        if (!order) return;
+
+        const quantity = item.quantity || 1;
+        const beerName = item.beerType || item.name;
+
+        // 1. Validation
+        // For Variado, we validate assuming at least 1 unit is available if adding a new crate.
+        // Actually validating "1 Box" of Variado means do we have the box? We assume yes.
+        // For the specific beer selected, we check 1 unit.
+        const unitsToCheck = (item.beerVariety === 'Variado') ? 1 : quantity;
+        const emissionToCheck = (item.beerVariety === 'Variado') ? 'Unidad' : item.emission;
+
+        const canFulfill = checkStock(beerName, emissionToCheck, item.subtype, unitsToCheck);
+
+        if (!canFulfill) {
+            alert(`⚠️ Stock insuficiente para ${beerName}`);
+            return;
+        }
+
+        let itemToAdd = { ...item, quantity, addedAt: new Date().toISOString() };
+
+        // 2. Stock Deduction Logic
+        if (order.type === 'Local') {
+            // For LOCAL orders, we treat everything as an Open List (Libre) to allow granular control
+            // unless it's explicitly 'Consumo' which is already handled.
+
+            // Deduct Stock (Bulk for the initial add)
+            if (item.beerVariety === 'Variado') {
+                await deductStock(beerName, 'Unidad', item.subtype, 1);
+                itemToAdd.slots = [beerName];
+            } else {
+                // For Standard Products (Caja, Media Caja, etc) in LOCAL mode
+                // Do NOT deduct stock immediately.
+                // Initialize empty slots (TicketGrid will populate nulls based on total units derived from emission).
+                itemToAdd.slots = [];
+            }
+        }
+
+        // 3. Update State
+        setPendingOrders(prev => prev.map(o => {
+            if (o.id === orderId) {
                 return {
-                    ...order,
-                    items: [...order.items, { ...item, addedAt: new Date().toISOString() }]
+                    ...o,
+                    items: [...o.items, itemToAdd]
                 };
             }
-            return order;
+            return o;
         }));
     };
 
-    // Remove item from ticket (optional, good for corrections)
-    const removeItemFromOrder = (orderId, itemId) => {
-        setPendingOrders(prev => prev.map(order => {
-            if (order.id === orderId) {
+    const removeItemFromOrder = async (orderId, itemId) => {
+        const order = pendingOrders.find(o => o.id === orderId);
+        if (!order) return;
+
+        const item = order.items.find(i => i.id === itemId);
+        if (!item) return;
+
+        const beerName = item.beerType || item.name;
+
+        // Restore Stock Logic
+        if (order.type === 'Local') {
+            // Iterate slots and return each unit (Works for both Variado and our new Libre items)
+            const slotsToReturn = item.slots && item.slots.length > 0 ? item.slots : [beerName];
+            for (const slotBeer of slotsToReturn) {
+                if (slotBeer) {
+                    await addStock(slotBeer, 'Unidad', item.subtype, 1);
+                }
+            }
+        }
+
+        setPendingOrders(prev => prev.map(o => {
+            if (o.id === orderId) {
                 return {
-                    ...order,
-                    items: order.items.filter(i => i.id !== itemId)
+                    ...o,
+                    items: o.items.filter(i => i.id !== itemId)
                 };
             }
-            return order;
+            return o;
         }));
     };
 
-    // Close/Pay Order AND Record Sale in DB
+    const cancelOrder = async (orderId) => {
+        const order = pendingOrders.find(o => o.id === orderId);
+        if (!order) return;
+
+        if (order.type === 'Local') {
+            for (const item of order.items) {
+                const beerName = item.beerType || item.name;
+                const slotsToReturn = item.slots && item.slots.length > 0 ? item.slots : (item.beerVariety === 'Variado' ? [beerName] : []);
+                // If it was a bulk add without slots (shouldn't happen now), we might need fallback?
+                // But since we initialized slots=[], and they fill one by one...
+                // If slots is empty, nothing to return. Correct.
+
+                for (const slotBeer of slotsToReturn) {
+                    if (slotBeer) await addStock(slotBeer, 'Unidad', item.subtype, 1);
+                }
+
+                // Note: If we had legacy items that DID deduct bulk, this fix won't return their stock automatically.
+                // But for new items, this is correct.
+            }
+        }
+
+        setPendingOrders(prev => prev.filter(o => o.id !== orderId));
+    };
+
     const closeOrder = async (orderId, paymentMethod, reference = '') => {
-        // 1. Update Local State
-        let orderToClose = null;
+        const order = pendingOrders.find(o => o.id === orderId);
+        if (!order) return;
 
-        setPendingOrders(prev => prev.map(order => {
-            if (order.id === orderId) {
-                orderToClose = order;
-                return {
-                    ...order,
+        let finalTotalBs = 0;
+        let finalTotalUsd = 0;
+        const isLocal = order.type === 'Local';
+
+        // Helper buffers for Local Optimization
+        const localConsumptionMap = {}; // Key: "Beer_Subtype" -> Count (Units)
+
+        // 1. Process Items (Stock Deduction & Aggregation)
+        for (const item of order.items) {
+            const beerName = item.beerType || item.name;
+
+            // --- Stock Logic ---
+            if (!isLocal) {
+                if (item.beerVariety === 'Variado') {
+                    const slotsToDeduct = item.slots && item.slots.length > 0 ? item.slots : [beerName];
+                    for (const slotBeer of slotsToDeduct) {
+                        if (slotBeer) await deductStock(slotBeer, 'Unidad', item.subtype, 1);
+                    }
+                } else {
+                    await deductStock(beerName, item.emission, item.subtype, item.quantity || 1);
+                }
+            }
+
+            // --- Pricing Aggregation ---
+            if (isLocal) {
+                // Determine actual beer for each slot (could be mixed in future, but currently grouped by Item)
+                const slotsToCount = item.slots || [];
+                for (const slotBeer of slotsToCount) {
+                    if (slotBeer) {
+                        // We aggregate by the ACTUAL beer in the slot (allows mix handling if logic existed)
+                        // Currently item.subtype is uniform for the item row.
+                        const key = `${slotBeer}_${item.subtype}`;
+                        localConsumptionMap[key] = (localConsumptionMap[key] || 0) + 1;
+                    }
+                }
+            } else {
+                // Takeaway Logic (Standard)
+                if (item.beerVariety === 'Variado' && item.composition) {
+                    finalTotalBs += (item.unitPriceBs || 0) * (item.quantity || 1);
+                    finalTotalUsd += (item.unitPriceUsd || 0) * (item.quantity || 1);
+                } else {
+                    const priceBs = getBsPrice(beerName, item.emission, item.subtype, 'standard');
+                    const priceUsd = getPrice(beerName, item.emission, item.subtype, 'standard');
+                    finalTotalBs += priceBs * (item.quantity || 1);
+                    finalTotalUsd += priceUsd * (item.quantity || 1);
+                }
+            }
+        }
+
+        // 2. Calculate Optimized Price for Local Orders ("Best Price")
+        if (isLocal) {
+            for (const [key, totalUnits] of Object.entries(localConsumptionMap)) {
+                // Key format: "BeerName_Subtype"
+                const lastUnderscoreIndex = key.lastIndexOf('_');
+                const beerName = key.substring(0, lastUnderscoreIndex);
+                const subtype = key.substring(lastUnderscoreIndex + 1);
+
+                let remaining = totalUnits;
+
+                // Get Pack Sizes
+                const unitsCaja = getUnitsPerEmission('Caja', subtype) || 24; // Default fallback
+                const unitsMedia = getUnitsPerEmission('Media Caja', subtype) || 12;
+                const unitsSix = getUnitsPerEmission('Six Pack', subtype) || 6;
+                const isLata = subtype.toLowerCase().includes('lata');
+
+                console.log(`Optimizing ${beerName} (${subtype}): Total ${remaining}. C=${unitsCaja}, M=${unitsMedia}`);
+
+                // --- Greedy Decomposition ---
+
+                // 1. Cajas
+                if (unitsCaja > 1) {
+                    const numCajas = Math.floor(remaining / unitsCaja);
+                    if (numCajas > 0) {
+                        const pBs = getBsPrice(beerName, 'Caja', subtype, 'local');
+                        const pUsd = getPrice(beerName, 'Caja', subtype, 'local');
+                        finalTotalBs += numCajas * pBs;
+                        finalTotalUsd += numCajas * pUsd;
+                        remaining %= unitsCaja;
+                    }
+                }
+
+                // 2. Media Cajas
+                if (unitsMedia > 1) {
+                    const numMedias = Math.floor(remaining / unitsMedia);
+                    if (numMedias > 0) {
+                        const pBs = getBsPrice(beerName, 'Media Caja', subtype, 'local');
+                        const pUsd = getPrice(beerName, 'Media Caja', subtype, 'local');
+                        finalTotalBs += numMedias * pBs;
+                        finalTotalUsd += numMedias * pUsd;
+                        remaining %= unitsMedia;
+                    }
+                }
+
+                // 3. Six Packs (Only for Latas)
+                if (isLata && unitsSix > 1) {
+                    const numSix = Math.floor(remaining / unitsSix);
+                    if (numSix > 0) {
+                        const pBs = getBsPrice(beerName, 'Six Pack', subtype, 'local');
+                        const pUsd = getPrice(beerName, 'Six Pack', subtype, 'local');
+                        finalTotalBs += numSix * pBs;
+                        finalTotalUsd += numSix * pUsd;
+                        remaining %= unitsSix;
+                    }
+                }
+
+                // 4. Units (Remainder)
+                if (remaining > 0) {
+                    const pBs = getBsPrice(beerName, 'Unidad', subtype, 'local');
+                    const pUsd = getPrice(beerName, 'Unidad', subtype, 'local');
+                    finalTotalBs += remaining * pBs;
+                    finalTotalUsd += remaining * pUsd;
+                }
+            }
+        }
+
+        // 3. Update to PAID with Totals
+        let orderToClose = null;
+        setPendingOrders(prev => prev.map(o => {
+            if (o.id === orderId) {
+                orderToClose = {
+                    ...o,
                     status: 'PAID',
                     closedAt: new Date().toISOString(),
                     paymentMethod,
-                    reference
+                    reference,
+                    totalAmountBs: finalTotalBs,
+                    totalAmountUsd: finalTotalUsd
                 };
+                return orderToClose;
             }
-            return order;
+            return o;
         }));
 
-        // 2. Insert into Supabase 'sales' table
-        if (orderToClose && organizationId && user) {
-            try {
-                // Prepare rows
-                // Assuming 'items' has structure { name, subtype, emission, quantity, totalPrice? }
-                // We need to map this carefully.
-                // Assuming item.totalPrice is calculated or price * quantity.
+        console.log("Order Closed & Stock Updated. Optimized Total:", finalTotalBs);
+    };
 
-                const salesRows = orderToClose.items.map(item => {
-                    const productId = productMap?.[item.name] || null;
-                    return {
-                        organization_id: organizationId,
-                        product_name_snapshot: item.name,
-                        product_id: productId,
-                        subtype: item.subtype || 'Botella',
-                        emission: item.emission || 'Unidad',
-                        quantity: item.quantity || 1, // Ensure quantity is tracked
-                        // Calculate total price if not explicit? 
-                        // Let's assume item.price is unit price? or item.total?
-                        // Usually Ticket Items have 'price' (unit) and 'total'.
-                        // Let's use item.price * item.quantity if total not present.
-                        total_price: item.total || (item.price * (item.quantity || 1)),
-                        payment_method: paymentMethod,
-                        sold_by: user.id
-                    };
-                });
+    const updateOrderItemSlot = async (orderId, itemIndex, slotIndex, content) => {
+        const order = pendingOrders.find(o => o.id === orderId);
+        if (!order) return;
 
-                if (salesRows.length > 0) {
-                    const { error } = await createSales(salesRows);
-                    if (error) console.error("Error recording sales to DB:", error);
+        const item = order.items[itemIndex];
+        const oldContent = item.slots ? item.slots[slotIndex] : null;
+
+        // Stock Logic for Local + Variado/Libre Changes
+        // Apply to ALL Local orders now (removed Variado/Libre check)
+        if (order.type === 'Local') {
+
+            // 1. Validate New Content Stock (if adding)
+            if (content) {
+                const hasStock = checkStock(content, 'Unidad', item.subtype, 1);
+                if (!hasStock) {
+                    alert(`⚠️ Stock insuficiente para ${content}`);
+                    return; // Stop update
                 }
-            } catch (err) {
-                console.error("Error in closeOrder sync:", err);
+            }
+
+            // 2. Restore Old Content
+            if (oldContent) {
+                await addStock(oldContent, 'Unidad', item.subtype, 1);
+            }
+
+            // 3. Deduct New Content
+            if (content) {
+                await deductStock(content, 'Unidad', item.subtype, 1);
             }
         }
-    };
 
-    // Delete/Cancel Order
-    const cancelOrder = (orderId) => {
-        setPendingOrders(prev => prev.filter(order => order.id !== orderId));
-    };
+        // State Update
+        setPendingOrders(prev => prev.map(o => {
+            if (o.id !== orderId) return o;
 
-    // --- Consumption Tracking ---
+            const newItems = [...o.items];
+            const currentItem = newItems[itemIndex];
+            const newSlots = currentItem.slots ? [...currentItem.slots] : [];
 
-    // Helper to get unit count (Context usage issue: Need access to useProduct inside? 
-    // No, OrderContext can't consume ProductContext easily if circular.
-    // Better to pass 'slots' or 'totalUnits' when adding the item.
-    // Let's modify Actions to accept initialized slots or do it in Component?
-    // Doing it in Component is riskier for data integrity.
-    // Let's rely on 'quantity' and simple multipliers if possible, or expect `item` to have `slots`.
-    // Actually, simple solution: `createOrder` and `addItem` logic stays simple, 
-    // BUT we add a check: if `item.emission` is Crate, we might not know unit count here easily.
-    // Proposed Fix: The CALLER (SalesPage/PendingPage) should calculate total units and pass it?
-    // OR: We initiate `slots` lazily in `updateOrderItemSlot`.
-
-    const updateOrderItemSlot = (orderId, itemIndex, slotIndex, content) => {
-        setPendingOrders(prev => prev.map(order => {
-            if (order.id !== orderId) return order;
-
-            const newItems = [...order.items];
-            const item = newItems[itemIndex];
-
-            // Initialize slots if missing
-            // We need to valid unit count. Assuming the component rendered it correctly, 
-            // the `slots` array length should match what the UI expects.
-            // If it doesn't exist, we create it based on current known length logic 
-            // OR we just assume the specific array index is valid (Javascript arrays are sparse).
-
-            let newSlots = item.slots ? [...item.slots] : [];
-
-            // Set content
             newSlots[slotIndex] = content;
+            // For Libre, we don't want holes, we want a compact list
+            const finalSlots = currentItem.emission === 'Libre' ? newSlots.filter(s => s !== null) : newSlots;
+            newItems[itemIndex] = { ...currentItem, slots: finalSlots };
 
-            newItems[itemIndex] = { ...item, slots: newSlots };
-
-            return { ...order, items: newItems };
+            return { ...o, items: newItems };
         }));
     };
 
@@ -184,7 +374,7 @@ export const OrderProvider = ({ children }) => {
             removeItemFromOrder,
             closeOrder,
             cancelOrder,
-            updateOrderItemSlot // New Export
+            updateOrderItemSlot
         }}>
             {children}
         </OrderContext.Provider>

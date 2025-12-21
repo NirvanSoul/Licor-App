@@ -1,0 +1,190 @@
+/* CashPage.css */
+
+/* Grid Layouts */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    /* 12 Col Grid for flexibility */
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.col-span-4 {
+    grid-column: span 4;
+}
+
+.col-span-8 {
+    grid-column: span 8;
+}
+
+.col-span-6 {
+    grid-column: span 6;
+}
+
+.col-span-12 {
+    grid-column: span 12;
+}
+
+@media (max-width: 1024px) {
+
+    .col-span-4,
+    .col-span-8,
+    .col-span-6 {
+        grid-column: span 12;
+    }
+}
+
+/* Cards */
+.dashboard-card {
+    background: var(--bg-card);
+    border-radius: 24px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+.dashboard-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+}
+
+/* Hero Card - Main Sales */
+.card-hero {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    border: none;
+}
+
+.card-hero .label {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.card-hero .value {
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin: 0.5rem 0;
+    letter-spacing: -1px;
+}
+
+.card-hero .sub-value {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    width: fit-content;
+    backdrop-filter: blur(4px);
+}
+
+/* Donut Chart Simulation */
+.donut-chart-container {
+    position: relative;
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    /* Default gray circle if empty */
+    background: conic-gradient(var(--bg-card-hover) 0% 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+}
+
+.donut-inner {
+    width: 70%;
+    height: 70%;
+    background: var(--bg-card);
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+}
+
+/* List Styles */
+.top-product-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--bg-card-hover);
+}
+
+.top-product-item:last-child {
+    border-bottom: none;
+}
+
+.rank-badge {
+    width: 28px;
+    height: 28px;
+    background: var(--bg-card-hover);
+    color: var(--text-secondary);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.8rem;
+    margin-right: 1rem;
+}
+
+.top-product-item:nth-child(1) .rank-badge {
+    background: rgba(255, gold, 0, 0.1);
+    color: gold;
+}
+
+.top-product-item:nth-child(2) .rank-badge {
+    background: rgba(192, 192, 192, 0.1);
+    color: silver;
+}
+
+.top-product-item:nth-child(3) .rank-badge {
+    background: rgba(205, 127, 50, 0.1);
+    color: #cd7f32;
+}
+
+/* Custom Progress Bar */
+.progress-track {
+    height: 8px;
+    background: var(--bg-card-hover);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 6px;
+}
+
+.progress-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Typography Base */
+h2.card-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.stat-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.stat-label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}

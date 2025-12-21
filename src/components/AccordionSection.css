@@ -1,5 +1,5 @@
 .accordion-section {
-    background-color: #f0f0f0;
+    background-color: var(--bg-card-hover);
     border-radius: var(--radius-lg);
     margin-bottom: 1rem;
     overflow: hidden;
@@ -41,7 +41,7 @@
 
 .selection-preview {
     background-color: var(--text-primary);
-    color: white;
+    color: var(--bg-card);
     padding: 0.25rem 0.75rem;
     border-radius: var(--radius-full);
     font-size: 0.75rem;

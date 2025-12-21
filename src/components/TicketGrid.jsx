@@ -2,15 +2,19 @@ import React, { useState } from 'react';
 import TicketSlot from './TicketSlot';
 import { useProduct } from '../context/ProductContext';
 import { useOrder } from '../context/OrderContext';
+import { Delete } from 'lucide-react';
 
 export default function TicketGrid({ orderId, item, itemIndex }) {
     const { beerTypes, getPrice, getUnitsPerEmission, getBeerColor } = useProduct();
     const { updateOrderItemSlot } = useOrder();
 
-    const totalUnits = item.quantity * getUnitsPerEmission(item.emission, item.subtype);
+    const isLibre = item.emission === 'Libre';
+    const totalUnits = isLibre ? (item.slots?.length || 0) : (item.quantity * getUnitsPerEmission(item.emission, item.subtype));
 
     // Helper to get safe slots array
     const getSlots = () => {
+        if (isLibre) return item.slots || [];
+
         // Create full array of nulls based on current definition
         const displaySlots = Array(totalUnits).fill(null);
 
@@ -50,14 +54,16 @@ export default function TicketGrid({ orderId, item, itemIndex }) {
     };
 
     const groupedItems = getGroupedItems();
-    const isFull = slots.every(s => s !== null);
+    const isFull = isLibre ? false : slots.every(s => s !== null);
 
     // Beer Selector
     const handleBeerSelect = (beer) => {
-        // Find first empty slot
-        const emptyIndex = slots.findIndex(s => s === null);
-        if (emptyIndex !== -1) {
-            updateOrderItemSlot(orderId, itemIndex, emptyIndex, beer);
+        const currentSlots = getSlots();
+        // For Libre, we always append at the end. For fixed, we find nulls.
+        const targetIndex = isLibre ? currentSlots.length : currentSlots.findIndex(s => s === null);
+
+        if (targetIndex !== -1) {
+            updateOrderItemSlot(orderId, itemIndex, targetIndex, beer);
         } else {
             alert('Ticket lleno');
         }
@@ -76,7 +82,21 @@ export default function TicketGrid({ orderId, item, itemIndex }) {
         <div className="ticket-grid-container">
             <div className="ticket-grid-header">
                 <span className="ticket-grid-header-text">
-                    {item.beerType} {item.subtype} - {item.emission} ({slots.filter(s => s !== null).length}/{totalUnits})
+                    {isLibre ? `${item.name} (${slots.length} Uds)` : (item.beerVariety === 'Variado' ? `${item.emission} (${slots.filter(s => s !== null).length}/${totalUnits})` : `${item.beerType} ${item.subtype} - ${item.emission} (${slots.filter(s => s !== null).length}/${totalUnits})`)}
+                    {item.beerVariety === 'Variado' && (
+                        <span style={{
+                            marginLeft: '8px',
+                            background: 'var(--text-primary)',
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            fontSize: '0.75rem',
+                            color: 'var(--bg-card)',
+                            fontWeight: '700',
+                            verticalAlign: 'middle'
+                        }}>
+                            Variado
+                        </span>
+                    )}
                 </span>
                 {/* Clear Button? */}
             </div>
@@ -115,25 +135,77 @@ export default function TicketGrid({ orderId, item, itemIndex }) {
                     Selecciona para llenar espacios vacíos
                 </p>
                 <div className="beer-selector-grid">
-                    {beerTypes.map(beer => {
-                        const color = getBeerColor(beer);
-                        return (
-                            <button
-                                key={beer}
-                                onClick={() => handleBeerSelect(beer)}
-                                className="beer-selector-btn"
-                                style={{
-                                    background: color.bg, // Use user defined color
-                                    color: color.text,
-                                    borderColor: color.border
-                                }}
-                            >
-                                {beer}
-                            </button>
-                        );
-                    })}
+                    {beerTypes
+                        .filter(beer => {
+                            // Logic: If the item represents a specific beer (e.g. "Polar Pilsen"), 
+                            // ONLY show that beer. If the item is "Variado" or generic, show all matching the price limit.
+
+                            // 1. PRICE LIMIT LOGIC (Variado)
+                            if (item.beerVariety === 'Variado') {
+                                const anchorBeer = item.beerType;
+                                // Only filter if we have a valid anchor to compare against
+                                if (anchorBeer && !isLibre) {
+                                    // Compare UNIT prices in the same subtype context
+                                    const anchorPrice = getPrice(anchorBeer, 'Unidad', item.subtype);
+                                    const optionPrice = getPrice(beer, 'Unidad', item.subtype);
+
+                                    // If option is more expensive than anchor (with epsilon), hide it
+                                    if (optionPrice > anchorPrice + 0.001) {
+                                        return false;
+                                    }
+                                }
+                                return true;
+                            }
+
+                            // 2. Exact Match Logic (Non-Variado)
+                            // Check item.beerType first (standard in SalesPage), then item.name (fallback)
+                            const typeToCheck = item.beerType || item.name;
+
+                            // We check if the current ticket item's type EXACTLY matches a known beer type in the system.
+                            // If it matches, we assume the user only wants to fill this crate with that specific beer.
+                            const isSpecificBeer = beerTypes.includes(typeToCheck);
+
+                            if (isSpecificBeer) {
+                                return beer === typeToCheck;
+                            }
+                            return true; // Show all if "Variado" or unknown type
+                        })
+                        .map(beer => {
+                            const color = getBeerColor(beer);
+                            return (
+                                <button
+                                    key={beer}
+                                    onClick={() => handleBeerSelect(beer)}
+                                    className="beer-selector-btn"
+                                    style={{
+                                        background: color.bg, // Use user defined color
+                                        color: color.text,
+                                        borderColor: color.border
+                                    }}
+                                >
+                                    {beer}
+                                </button>
+                            );
+                        })}
+                    {/* Backspace Button */}
+                    <button
+                        className="beer-selector-btn delete-btn"
+                        onClick={() => {
+                            // Find the last non-null slot (highest index)
+                            const filledIndices = slots
+                                .map((val, idx) => (val !== null ? idx : -1))
+                                .filter(idx => idx !== -1);
+
+                            if (filledIndices.length > 0) {
+                                const lastIndex = Math.max(...filledIndices);
+                                updateOrderItemSlot(orderId, itemIndex, lastIndex, null);
+                            }
+                        }}
+                    >
+                        <Delete size={20} strokeWidth={2.5} />
+                    </button>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }

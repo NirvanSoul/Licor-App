@@ -13,6 +13,7 @@ import ScrollToTop from './components/ScrollToTop';
 import { ProductProvider } from './context/ProductContext';
 import { OrderProvider } from './context/OrderContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 
 // Private Route Wrapper
 const PrivateRoute = () => {
@@ -26,27 +27,29 @@ const PrivateRoute = () => {
 function App() {
   return (
     <AuthProvider>
-      <ProductProvider>
-        <OrderProvider>
-          <BrowserRouter>
-            <ScrollToTop />
-            <Routes>
-              {/* Public Routes - All routes are public now in Mock Mode */}
-              {/* <Route path="/login" element={<Login />} /> */}
-              {/* <Route path="/register" element={<Register />} /> */}
-              {/* <Route path="/complete-registration" element={<CompleteRegistration />} /> */}
+      <ThemeProvider>
+        <ProductProvider>
+          <OrderProvider>
+            <BrowserRouter>
+              <ScrollToTop />
+              <Routes>
+                {/* Public Routes - All routes are public now in Mock Mode */}
+                {/* <Route path="/login" element={<Login />} /> */}
+                {/* <Route path="/register" element={<Register />} /> */}
+                {/* <Route path="/complete-registration" element={<CompleteRegistration />} /> */}
 
-              <Route path="/" element={<MainLayout />}>
-                <Route index element={<Navigate to="/vender" replace />} />
-                <Route path="vender" element={<SalesPage />} />
-                <Route path="caja" element={<CashPage />} />
-                <Route path="pendientes" element={<PendingPage />} />
-                <Route path="ajustes" element={<SettingsPage />} />
-              </Route>
-            </Routes>
-          </BrowserRouter>
-        </OrderProvider>
-      </ProductProvider>
+                <Route path="/" element={<MainLayout />}>
+                  <Route index element={<Navigate to="/vender" replace />} />
+                  <Route path="vender" element={<SalesPage />} />
+                  <Route path="caja" element={<CashPage />} />
+                  <Route path="pendientes" element={<PendingPage />} />
+                  <Route path="ajustes" element={<SettingsPage />} />
+                </Route>
+              </Routes>
+            </BrowserRouter>
+          </OrderProvider>
+        </ProductProvider>
+      </ThemeProvider>
     </AuthProvider>
   );
 }

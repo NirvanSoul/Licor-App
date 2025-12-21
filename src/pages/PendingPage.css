@@ -1,30 +1,4 @@
-.page-container {
-    padding: 2rem;
-    background-color: #F5F5F7;
-    min-height: 100vh;
-}
-
-@media (max-width: 640px) {
-    .page-container {
-        padding: 1rem;
-    }
-
-    .orders-grid {
-        grid-template-columns: 1fr;
-        /* Full width cards */
-    }
-
-    .order-card {
-        margin-bottom: 0.5rem;
-    }
-}
-
-.page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 2rem;
-}
+/* Page container and header are now in index.css */
 
 .text-2xl {
     font-size: 1.5rem;
@@ -35,13 +9,24 @@
 }
 
 .text-gray-800 {
-    color: #1f2937;
+    color: var(--text-primary);
 }
 
 .orders-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 1.5rem;
+    align-items: start;
+}
+
+@media (max-width: 640px) {
+    .orders-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .order-card {
+        margin-bottom: 0.5rem;
+    }
 }
 
 .empty-state {
@@ -51,24 +36,24 @@
     align-items: center;
     justify-content: center;
     padding: 4rem;
-    color: #9CA3AF;
+    color: var(--text-muted);
 }
 
 /* Order Card */
 .order-card {
-    background: white;
+    background: var(--bg-card);
     border-radius: 16px;
     padding: 1.25rem;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    box-shadow: var(--shadow-sm);
     display: flex;
     flex-direction: column;
     transition: transform 0.2s;
-    border: 1px solid rgba(0, 0, 0, 0.04);
+    border: 1px solid var(--accent-light);
 }
 
 .order-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--shadow-md);
 }
 
 .order-header {
@@ -77,24 +62,32 @@
     align-items: flex-start;
     margin-bottom: 1rem;
     padding-bottom: 0.75rem;
-    border-bottom: 1px dashed #E5E7EB;
+    border-bottom: 1px dashed var(--accent-light);
+    cursor: pointer;
+}
+
+.order-title-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .customer-name {
     font-weight: 700;
-    color: #111827;
+    color: var(--text-primary);
     font-size: 1.1rem;
     margin: 0;
 }
 
 .ticket-number {
     font-size: 0.8rem;
-    color: #6B7280;
+    color: var(--text-secondary);
     font-family: monospace;
 }
 
 .time-badge {
     background: #FEF3C7;
+    /* Warning light */
     color: #D97706;
     padding: 0.25rem 0.5rem;
     border-radius: 999px;
@@ -102,10 +95,14 @@
     font-weight: 600;
 }
 
+.dark .time-badge {
+    background: #78350f;
+    color: #fcd34d;
+}
+
 .order-items-list {
     flex: 1;
     margin-bottom: 1rem;
-    /* max-height removed to allow TicketGrid to expand */
 }
 
 .order-item-row {
@@ -113,12 +110,12 @@
     gap: 0.5rem;
     margin-bottom: 0.5rem;
     font-size: 0.9rem;
-    color: #374151;
+    color: var(--text-primary);
 }
 
 .item-qty {
     font-weight: 600;
-    color: #111827;
+    color: var(--text-primary);
     min-width: 20px;
 }
 
@@ -136,7 +133,7 @@
     align-items: center;
     margin-bottom: 1rem;
     font-weight: 700;
-    color: #111827;
+    color: var(--text-primary);
 }
 
 .actions-row {
@@ -160,12 +157,12 @@
 }
 
 .action-btn.add {
-    background: #F3F4F6;
-    color: #374151;
+    background: var(--bg-card-hover);
+    color: var(--text-primary);
 }
 
 .action-btn.add:hover {
-    background: #E5E7EB;
+    background: var(--accent-light);
 }
 
 .action-btn.pay {
@@ -173,18 +170,36 @@
     color: white;
 }
 
-
 .action-btn.pay:hover {
     opacity: 0.9;
 }
 
-/* Ticket Grid Styles (Moved from Inline) */
+.actions-row-single {
+    width: 100%;
+}
+
+.close-ticket-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #F97316 0%, #EA580C 100%);
+    color: white;
+    font-size: 1rem;
+    padding: 0.8rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(249, 115, 22, 0.3);
+}
+
+.close-ticket-btn:hover {
+    box-shadow: 0 10px 15px -3px rgba(249, 115, 22, 0.4);
+    transform: translateY(-1px);
+}
+
+/* Ticket Grid Styles */
 .ticket-grid-container {
-    background: #fff;
+    background: var(--bg-card);
     border-radius: 16px;
     padding: 1rem;
     margin-bottom: 1rem;
-    border: 1px solid #f3f4f6;
+    border: 1px solid var(--accent-light);
 }
 
 .ticket-grid-header {
@@ -197,7 +212,7 @@
 .ticket-grid-header-text {
     font-weight: 700;
     font-size: 0.9rem;
-    color: #374151;
+    color: var(--text-primary);
 }
 
 .ticket-slots-grid {
@@ -208,13 +223,13 @@
 }
 
 .beer-selector-container {
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--accent-light);
     padding-top: 1rem;
 }
 
 .beer-selector-label {
     font-size: 0.8rem;
-    color: #9CA3AF;
+    color: var(--text-muted);
     margin-bottom: 0.5rem;
     text-align: center;
 }
@@ -228,27 +243,25 @@
 .beer-selector-btn {
     padding: 0.25rem 0.1rem;
     border-radius: 8px;
-    border: 1px solid #E5E7EB;
-    background: #F9FAFB;
+    border: 1px solid var(--accent-light);
+    background: var(--bg-card-hover);
     font-weight: 600;
     font-size: 0.75rem;
-    color: #374151;
+    color: var(--text-primary);
     cursor: pointer;
     transition: all 0.1s;
     height: 48px;
-    /* Fixed height for uniformity */
     display: flex;
     align-items: center;
     justify-content: center;
     text-align: center;
     word-break: break-word;
-    /* Handle long names */
     line-height: 1.1;
     overflow: hidden;
 }
 
 .beer-selector-btn:active {
-    background: #E5E7EB;
+    background: var(--accent-light);
     transform: scale(0.98);
 }
 
@@ -266,6 +279,164 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 2px solid white;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    border: 2px solid var(--bg-card);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Modal Styles */
+.pending-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    backdrop-filter: blur(4px);
+}
+
+.pending-modal-content {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--accent-light);
+    max-width: 600px;
+    width: 90%;
+    animation: modal-pop 0.2s ease-out;
+}
+
+@keyframes modal-pop {
+    from {
+        transform: scale(0.95);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.pending-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.pending-modal-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.pending-modal-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 0.5rem;
+    border-radius: var(--radius-full);
+}
+
+.close-btn:hover {
+    background: var(--bg-card-hover);
+    color: var(--text-primary);
+}
+
+.section-title {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+}
+
+.selector-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 0.75rem;
+}
+
+.option-btn {
+    padding: 1rem;
+    border-radius: 12px;
+    border: 1px solid var(--accent-light);
+    background: var(--bg-card);
+    font-weight: 600;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: var(--shadow-sm);
+}
+
+.option-btn:hover {
+    border-color: #F97316;
+    box-shadow: var(--shadow-md);
+}
+
+/* Delete Button Specifics matching mockup */
+.beer-selector-btn.delete-btn {
+    background: #ffffff;
+    border: 2px solid #E5E5EA;
+    color: #1C1C1E;
+    /* Ensure icon is black */
+}
+
+.dark .beer-selector-btn.delete-btn {
+    background: #1C1C1E;
+    border: 2px solid #a3a3a3;
+    color: #E5E5EA;
+    /* Ensure icon is white */
+}
+
+.beer-selector-btn.delete-btn:hover {
+    transform: scale(0.98);
+}
+
+/* Ticket Slot Empty Button */
+.ticket-slot-btn.empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #F9FAFB;
+    border: 2px dashed #E5E7EB;
+    border-radius: 8px;
+    padding: 0.5rem;
+    cursor: pointer;
+    font-size: 0.75rem;
+    color: #9CA3AF;
+    font-weight: 600;
+    height: 50px;
+    transition: all 0.2s;
+    width: 100%;
+}
+
+.dark .ticket-slot-btn.empty {
+    background: #1C1C1E;
+    border: 2px dashed #a3a3a3;
+    color: #E5E5EA;
+}
+
+.ticket-slot-btn.empty:hover {
+    border-color: #D1D5DB;
+}
+
+.dark .ticket-slot-btn.empty:hover {
+    border-color: #E5E5EA;
+}
+
+.modal-footer-text {
+    margin-top: 1.5rem;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    text-align: center;
 }

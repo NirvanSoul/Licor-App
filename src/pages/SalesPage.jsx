@@ -1,18 +1,40 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom'; // Added missing import
+import { useNavigate } from 'react-router-dom';
 import AccordionSection from '../components/AccordionSection';
-import ContainerSelector from '../components/ContainerSelector'; // Added import
-import { Trash2, ShoppingBag, Store, User, Hash, CheckCircle, PlusCircle, X } from 'lucide-react';
+import ContainerSelector from '../components/ContainerSelector';
+import { Trash2, ShoppingBag, Store, User, Hash, CheckCircle, PlusCircle, X, AlertTriangle, AlertCircle } from 'lucide-react';
 import { useProduct } from '../context/ProductContext';
 import { useOrder } from '../context/OrderContext';
 import './SalesPage.css';
 
 export default function SalesPage() {
     const navigate = useNavigate();
-    const { beerTypes, emissionOptions, getPrice, getBsPrice, getUsdPrice, subtypes, deductStock } = useProduct(); // Context Data
+    const {
+        beerTypes, emissionOptions, getPrice, getBsPrice, getUsdPrice, subtypes,
+        deductStock, checkStock, getUnitsPerEmission, checkAggregateStock,
+        getInventory, getEmissionsForSubtype
+    } = useProduct();
     const { createOrder } = useOrder();
 
     const [openSection, setOpenSection] = useState('consumption');
+    const [showResetModal, setShowResetModal] = useState(false);
+    const [stockError, setStockError] = useState(null);
+
+    // --- STATE FOR MAIN ORDER ---
+    const [orderState, setOrderState] = useState({
+        consumptionMode: null,  // 'Local' | 'Para Llevar'
+        emission: null,         // 'Caja', 'Media Caja', 'Unidad'
+        subtype: 'Botella',     // 'Botella', 'Lata'
+        beerVariety: 'Normal',  // 'Normal' | 'Variado'
+        beerType: null,         // Used if Normal OR Local+Variado (as Base)
+        quantity: 1,            // Multiplier for the whole pack
+    });
+
+    const [cartItems, setCartItems] = useState([]);
+
+    // --- STATE FOR MIXED BUILDER (Only for Para Llevar) ---
+    const [showMixedBuilder, setShowMixedBuilder] = useState(false);
+    const [mixedComposition, setMixedComposition] = useState({});
 
     // Listen for Menu Reset
     useEffect(() => {
@@ -21,15 +43,19 @@ export default function SalesPage() {
                 setShowResetModal(true);
             }
         };
-
         window.addEventListener('reset-flow', handleResetFlow);
         return () => window.removeEventListener('reset-flow', handleResetFlow);
     }, []);
 
-    const [showResetModal, setShowResetModal] = useState(false);
 
     const confirmReset = () => {
         setCartItems([]);
+        resetOrderState();
+        setCustomerName('');
+        setShowResetModal(false);
+    };
+
+    const resetOrderState = () => {
         setOrderState({
             consumptionMode: null,
             emission: null,
@@ -38,40 +64,83 @@ export default function SalesPage() {
             beerType: null,
             quantity: 1
         });
+        setMixedComposition({});
+        setShowMixedBuilder(false);
         setOpenSection('consumption');
         setTicketStep(0);
-        setCustomerName('');
-        setShowResetModal(false);
     };
 
-    const [orderState, setOrderState] = useState({
-        consumptionMode: null,
-        emission: null,
-        subtype: 'Botella',
-        beerVariety: 'Normal',
-        beerType: null,
-        quantity: 1,
-    });
+    // --- HELPER: MIXED CALCULATIONS ---
+    const getMixedTotalUnits = () => {
+        return Object.values(mixedComposition).reduce((a, b) => a + b, 0);
+    };
 
-    // ...
+    const getTargetUnits = () => {
+        if (!orderState.emission) return 0;
+        if (typeof getUnitsPerEmission !== 'function') return 1;
+        return getUnitsPerEmission(orderState.emission, orderState.subtype) || 1;
+    };
 
-    const [cartItems, setCartItems] = useState([]); // List of confirmed items
+    const getMixedPrice = (mode = 'standard') => {
+        if (Object.keys(mixedComposition).length === 0) return 0;
 
+        let maxPrice = 0;
+        const targetEmission = orderState.emission;
+        const targetSubtype = orderState.subtype;
+
+        Object.keys(mixedComposition).forEach(beerName => {
+            const price = getPrice(beerName, targetEmission, targetSubtype, mode);
+            if (price > maxPrice) maxPrice = price;
+        });
+        return maxPrice;
+    };
+
+    const getMixedBsPrice = (mode = 'standard') => {
+        if (Object.keys(mixedComposition).length === 0) return 0;
+
+        let maxPrice = 0;
+        const targetEmission = orderState.emission;
+        const targetSubtype = orderState.subtype;
+
+        Object.keys(mixedComposition).forEach(beerName => {
+            const price = getBsPrice(beerName, targetEmission, targetSubtype, mode);
+            if (price > maxPrice) maxPrice = price;
+        });
+        return maxPrice;
+    };
+
+    // --- TOTAL CALCULATIONS (CART + CURRENT) ---
     const calculateTotal = () => {
         let total = 0;
 
-        // 1. Sum Cart Items (Use their OWN mode)
+        // 1. Sum Cart items
         cartItems.forEach(item => {
             const mode = item.consumptionMode === 'Local' ? 'local' : 'standard';
-            const price = getBsPrice(item.beerType, item.emission, item.subtype, mode);
-            total += price * item.quantity;
+            if (item.beerVariety === 'Variado') {
+                if (item.consumptionMode === 'Para Llevar') {
+                    total += (item.unitPriceBs || 0) * item.quantity;
+                } else {
+                    // Local Variado: Charge the full pack price (e.g. Media Caja) as requested
+                    total += (item.unitPriceBs || 0) * item.quantity;
+                }
+            } else {
+                const price = getBsPrice(item.beerType, item.emission, item.subtype, mode) || 0;
+                total += price * item.quantity;
+            }
         });
 
-        // 2. Add Current Selection (Use CURRENT global mode)
+        // 2. Add Current Selection 
         if (orderState.beerType && orderState.emission) {
             const currentMode = orderState.consumptionMode === 'Local' ? 'local' : 'standard';
-            const currentPrice = getBsPrice(orderState.beerType, orderState.emission, orderState.subtype, currentMode);
-            total += currentPrice * orderState.quantity;
+            if (orderState.beerVariety === 'Normal') {
+                const currentPrice = getBsPrice(orderState.beerType, orderState.emission, orderState.subtype, currentMode) || 0;
+                total += currentPrice * orderState.quantity;
+            } else if (orderState.beerVariety === 'Variado' && orderState.consumptionMode === 'Local') {
+                // Local Variado: Charge the price of the Selected Emission (e.g. Media Caja)
+                // The user is buying the "Right" to consume a Media Caja.
+                const starterPrice = getBsPrice(orderState.beerType, orderState.emission, orderState.subtype, 'local') || 0;
+                total += starterPrice * orderState.quantity;
+            }
         }
 
         return total;
@@ -80,28 +149,43 @@ export default function SalesPage() {
     const calculateTotalUsd = () => {
         let total = 0;
 
-        // 1. Sum Cart Items
         cartItems.forEach(item => {
             const mode = item.consumptionMode === 'Local' ? 'local' : 'standard';
-            const price = getPrice(item.beerType, item.emission, item.subtype, mode);
-            total += price * item.quantity;
+            if (item.beerVariety === 'Variado') {
+                if (item.consumptionMode === 'Para Llevar') {
+                    total += (item.unitPriceUsd || 0) * item.quantity;
+                } else {
+                    // Local Variado: Sum the full pack price
+                    total += (item.unitPriceUsd || 0) * item.quantity;
+                }
+            } else {
+                const price = getPrice(item.beerType, item.emission, item.subtype, mode) || 0;
+                total += price * item.quantity;
+            }
         });
 
-        // 2. Add Current Selection
         if (orderState.beerType && orderState.emission) {
             const currentMode = orderState.consumptionMode === 'Local' ? 'local' : 'standard';
-            const currentPrice = getPrice(orderState.beerType, orderState.emission, orderState.subtype, currentMode);
-            total += currentPrice * orderState.quantity;
+            if (orderState.beerVariety === 'Normal') {
+                const currentPrice = getPrice(orderState.beerType, orderState.emission, orderState.subtype, currentMode) || 0;
+                total += currentPrice * orderState.quantity;
+            } else if (orderState.beerVariety === 'Variado' && orderState.consumptionMode === 'Local') {
+                // Local Variado: Charge price of Selected Emission
+                const starterPrice = getPrice(orderState.beerType, orderState.emission, orderState.subtype, 'local') || 0;
+                total += starterPrice * orderState.quantity;
+            }
         }
 
         return total;
     };
 
     const formatCurrency = (amount) => {
+        if (isNaN(amount)) return '0,00';
         return new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
     };
 
     const formatUsd = (amount) => {
+        if (isNaN(amount)) return '$0.00';
         return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
     };
 
@@ -114,13 +198,18 @@ export default function SalesPage() {
 
     const [paymentMethod, setPaymentMethod] = useState(null);
     const [paymentReference, setPaymentReference] = useState('');
-    const paymentMethods = ['Pago Movil', 'Efectivo', 'Punto'];
+    const paymentMethods = ['Pago Movil', 'Efectivo', 'Punto', 'BioPago'];
 
     const [showModal, setShowModal] = useState(false);
 
-    // Handlers
+    // --- HANDLERS ---
+
     const handleConsumptionSelect = (mode) => {
-        setOrderState(prev => ({ ...prev, consumptionMode: mode }));
+        setOrderState(prev => ({
+            ...prev,
+            consumptionMode: mode
+        }));
+        if (mode === 'Local') setShowMixedBuilder(false);
         setOpenSection('emission');
     };
 
@@ -129,7 +218,22 @@ export default function SalesPage() {
         setOpenSection('beer');
     };
 
+    const handleVarietyToggle = (variety) => {
+        setOrderState(prev => ({ ...prev, beerVariety: variety, beerType: null }));
+
+        if (variety === 'Variado') {
+            setMixedComposition({});
+            if (orderState.consumptionMode === 'Para Llevar' && orderState.emission) {
+                setShowMixedBuilder(true);
+            }
+        } else {
+            setShowMixedBuilder(false);
+        }
+    };
+
     const handleBeerSelect = (option) => {
+        if (orderState.beerVariety === 'Variado' && orderState.consumptionMode === 'Para Llevar') return;
+
         setOrderState(prev => ({ ...prev, beerType: option }));
         setOpenSection(null);
     };
@@ -138,204 +242,260 @@ export default function SalesPage() {
         setOpenSection(openSection === section ? null : section);
     };
 
-    // --- CART ACTIONS ---
-    const handleAddToCart = () => {
-        if (!isSelectionComplete()) return;
+    // --- MIXED BUILDER HANDLERS (Para Llevar) ---
+    const addToMix = (beer) => {
+        const currentCount = getMixedTotalUnits();
+        const target = getTargetUnits();
+        if (currentCount >= target) return;
+        if (!checkStock(beer, 'Unidad', orderState.subtype, 1)) return;
+        setMixedComposition(prev => ({ ...prev, [beer]: (prev[beer] || 0) + 1 }));
+    };
+
+    const removeFromMix = (beer) => {
+        setMixedComposition(prev => {
+            const current = prev[beer] || 0;
+            if (current <= 0) return prev;
+            const next = current - 1;
+            if (next === 0) {
+                const { [beer]: _, ...rest } = prev;
+                return rest;
+            }
+            return { ...prev, [beer]: next };
+        });
+    };
+
+    const confirmMixedCase = () => {
+        const currentCount = getMixedTotalUnits();
+        const target = getTargetUnits();
+        if (currentCount !== target) {
+            alert(`Debes completar la caja. Llevas ${currentCount} de ${target}.`);
+            return;
+        }
+        const mode = 'standard';
+        const finalPriceBs = getMixedBsPrice(mode);
+        const finalPriceUsd = getMixedPrice(mode);
 
         const newItem = {
             id: Date.now(),
-            ...orderState
+            ...orderState,
+            beerType: 'Variado',
+            composition: { ...mixedComposition },
+            unitPriceBs: finalPriceBs,
+            unitPriceUsd: finalPriceUsd
         };
-        // Remove global mode from item to avoid confusion (managed globally)
-        // But we keep it in the object for Calculate logic if needed, 
-        // essentially snapshotting the state.
+        setCartItems(prev => [...prev, newItem]);
+        resetOrderState();
+    };
+
+    // --- VALIDATION ---
+    const validateStock = () => {
+        if (orderState.beerVariety === 'Variado') return true;
+
+        const beer = orderState.beerType;
+        const subtype = orderState.subtype;
+        const emission = orderState.emission;
+        const quantity = orderState.quantity;
+
+        setStockError(null);
+        if (!beer || !emission) return true;
+
+        const currentSelectionUnits = quantity * getUnitsPerEmission(emission, subtype);
+        let totalRequired = currentSelectionUnits;
+
+        const unitsInCart = cartItems.reduce((acc, item) => {
+            if (item.beerType === beer && item.subtype === subtype && item.beerVariety === 'Normal') {
+                return acc + (item.quantity * getUnitsPerEmission(item.emission, item.subtype));
+            }
+            return acc;
+        }, 0);
+
+        totalRequired += unitsInCart;
+        const available = getInventory(beer, subtype);
+
+        if (available < totalRequired) {
+            setStockError({
+                product: `${beer} ${subtype}`,
+                required: totalRequired,
+                available: available,
+                missing: totalRequired - available
+            });
+            return false;
+        }
+        return true;
+    };
+
+    // --- CART ACTIONS ---
+    const handleAddToCart = () => {
+        if (!isSelectionComplete()) return;
+        if (!validateStock()) return;
+
+        let newItem = {
+            id: Date.now(),
+            ...orderState,
+        };
+
+        // SPECIAL HANDLING FOR LOCAL VARIADO
+        if (orderState.beerVariety === 'Variado' && orderState.consumptionMode === 'Local') {
+            newItem = {
+                ...newItem,
+                beerType: `Variado (${orderState.beerType})`, // Keeping this unique ID for internal logic might be ok, or simlify.
+                displayBase: orderState.beerType, // NEW: cleaner display name
+                baseBeer: orderState.beerType,
+                // Charge price of SELECTED EMISSION (e.g. Media Caja)
+                unitPriceBs: getBsPrice(orderState.beerType, orderState.emission, orderState.subtype, 'local') || 0,
+                unitPriceUsd: getPrice(orderState.beerType, orderState.emission, orderState.subtype, 'local') || 0
+            };
+        }
 
         setCartItems(prev => [...prev, newItem]);
-
-        // Reset Selection AND Consumption Mode to start fresh
-        setOrderState(prev => ({
-            ...prev,
-            consumptionMode: null, // Force re-selection
-            emission: null,
-            subtype: 'Botella',
-            beerVariety: 'Normal',
-            beerType: null,
-            quantity: 1
-        }));
-        setOpenSection('consumption'); // Go back to start
+        resetOrderState();
     };
 
     const handleRemoveFromCart = (id) => {
-        setCartItems(prev => prev.filter(item => item.id !== id));
+        const newItems = cartItems.filter(item => item.id !== id);
+        setCartItems(newItems);
+        if (newItems.length === 0) setTicketStep(0);
     };
 
     const handleInitialCreateClick = () => {
-        // Validation: Must have at least 1 item (Cart or Current)
-        if (cartItems.length === 0 && !isSelectionComplete()) {
-            return;
-        }
+        if (cartItems.length === 0 && !isSelectionComplete()) return;
 
-        // Auto-add current selection to cart if exists
         if (isSelectionComplete()) {
+            if (!validateStock()) return;
             handleAddToCart();
         }
 
-        // Generate Ticket Information (Needed for Local, tracked for all)
-        const randomTicket = Math.floor(1000 + Math.random() * 9000);
-        setTicketNumber(randomTicket);
-
+        setTicketNumber(Math.floor(1000 + Math.random() * 9000));
         const now = new Date();
-        const formatter = new Intl.DateTimeFormat('es-VE', {
+        setTicketDate(new Intl.DateTimeFormat('es-VE', {
             timeZone: 'America/Caracas',
             day: '2-digit', month: '2-digit', year: 'numeric',
             hour: '2-digit', minute: '2-digit', hour12: true
-        });
-        setTicketDate(formatter.format(now));
+        }).format(now));
 
-        // Always proceed to Payment Step (Unified Flow)
         setTicketStep(2);
     };
 
     const handleFinalConfirm = () => {
         const hasLocal = cartItems.some(i => i.consumptionMode === 'Local');
-
-        // Validation Logic for Unified Step 2
         if (ticketStep === 2) {
-            // Payment Validation (Mandatory for All)
-            if (!paymentMethod) {
-                alert("Por favor selecciona un método de pago.");
-                return;
-            }
-            if (paymentMethod === 'Pago Movil' && !paymentReference.trim()) {
-                alert("Por favor ingresa el número de referencia.");
-                return;
-            }
+            if (hasLocal && !customerName.trim()) { alert("Ingresa nombre del cliente."); return; }
 
-            // Customer Name Validation (Mandatory for Local)
-            if (hasLocal) {
-                if (!customerName.trim()) {
-                    alert("Por favor ingresa el nombre del cliente.");
-                    return;
-                }
-            }
+            // STRICT PAYMENT VALIDATION FOR ALL ORDERS
+            if (!paymentMethod) { alert("Selecciona método de pago para procesar la orden."); return; }
+            if (paymentMethod === 'Pago Movil' && !paymentReference.trim()) { alert("Ingresa referencia."); return; }
         }
 
-        // --- SPLIT LOGIC ---
-        // 1. Filter Items
         const localItems = cartItems.filter(i => i.consumptionMode === 'Local');
 
-        // 2. Create Pending Ticket (if any local items)
-        if (localItems.length > 0) {
-            createOrder(customerName, localItems, 'Local');
+        if (localItems.length > 0 || cartItems.length === 0) {
+            createOrder(customerName, localItems, 'Local', paymentMethod);
         }
 
-        // 3. Process Payment & Deduct Inventory
+        // Deduct Take Away & Normal Local
         cartItems.forEach(item => {
-            deductStock(item.beerType, item.emission, item.subtype, item.quantity);
+            if (item.consumptionMode === 'Para Llevar') {
+                if (item.beerVariety === 'Variado' && item.composition) {
+                    Object.entries(item.composition).forEach(([beer, units]) => {
+                        deductStock(beer, 'Unidad', item.subtype, units * item.quantity);
+                    });
+                } else {
+                    deductStock(item.beerType, item.emission, item.subtype, item.quantity);
+                }
+            } else if (item.consumptionMode === 'Local') {
+                // For Local Orders:
+                // 1. Normal (Media Caja, Caja): Do NOT deduct stock. Slots start empty (0/N).
+                // 2. Variado: Deduct 1 unit (Base Beer) as it starts with 1 slot filled.
+
+                if (item.beerVariety === 'Variado') {
+                    // Deduct 1 unit of the base beer
+                    // Note: item.beerType might be 'Variado (Base)', use item.baseBeer if available
+                    const beerToDeduct = item.baseBeer || item.beerType;
+                    // Clean up name if needed (remove 'Variado (...)')? 
+                    // Actually SalesConfig sets baseBeer correctly.
+                    deductStock(beerToDeduct, 'Unidad', item.subtype, 1);
+                }
+            }
         });
 
-        // 4. Show Success
-        setShowModal(true);
+        if (localItems.length > 0 && !cartItems.some(i => i.consumptionMode === 'Para Llevar')) {
+            navigateToPending();
+        } else {
+            setShowModal(true);
+        }
     };
 
     const closeModal = () => {
         setShowModal(false);
-        // Reset Everything
         setCartItems([]);
-        setOrderState({
-            consumptionMode: null,
-            emission: null,
-            subtype: 'Botella',
-            beerVariety: 'Normal',
-            beerType: null,
-            quantity: 1
-        });
+        resetOrderState();
         setCustomerName('');
         setPaymentMethod(null);
         setPaymentReference('');
         setTicketStep(0);
-        setOpenSection('consumption');
     };
 
-    const navigateToPending = () => {
-        navigate('/pendientes');
-        closeModal();
-    };
-
-    const handleClearBill = () => {
-        // Reset Everything immediately (No confirmation)
-        setCartItems([]);
-        setOrderState({
-            consumptionMode: null,
-            emission: null,
-            subtype: 'Botella',
-            beerVariety: 'Normal',
-            beerType: null,
-            quantity: 1
-        });
-        setOpenSection('consumption');
-        setTicketStep(0);
-        setCustomerName('');
-    };
-
+    const navigateToPending = () => { navigate('/pendientes'); closeModal(); };
+    const handleClearBill = () => { setCartItems([]); resetOrderState(); };
     const increaseQuantity = () => { setOrderState(prev => ({ ...prev, quantity: prev.quantity + 1 })); };
     const decreaseQuantity = () => { setOrderState(prev => ({ ...prev, quantity: prev.quantity > 1 ? prev.quantity - 1 : 1 })); };
-
-    // Toggles
-
 
     const VarietyToggle = () => (
         <div className="toggle-switch">
             <button
                 className={`toggle-option ${orderState.beerVariety === 'Normal' ? 'active' : ''}`}
-                onClick={(e) => { e.stopPropagation(); setOrderState(prev => ({ ...prev, beerVariety: 'Normal' })); }}
+                onClick={(e) => { e.stopPropagation(); handleVarietyToggle('Normal'); }}
             >
                 Normal
             </button>
             <button
                 className={`toggle-option ${orderState.beerVariety === 'Variado' ? 'active' : ''}`}
-                onClick={(e) => { e.stopPropagation(); setOrderState(prev => ({ ...prev, beerVariety: 'Variado' })); }}
+                onClick={(e) => { e.stopPropagation(); handleVarietyToggle('Variado'); }}
             >
                 Variado
             </button>
         </div>
     );
 
-    // Helpers
     const isSelectionComplete = () => {
+        if (orderState.beerVariety === 'Variado' && orderState.consumptionMode === 'Para Llevar') return false;
+        if (orderState.beerVariety === 'Variado' && orderState.consumptionMode === 'Local') {
+            return orderState.emission && orderState.beerType;
+        }
         return orderState.consumptionMode && orderState.emission && orderState.beerType;
     };
 
     const getButtonText = () => {
-        const hasSelection = isSelectionComplete();
-        const hasCart = cartItems.length > 0;
-
-        if (ticketStep === 0) {
-            if (!hasSelection && !hasCart) return 'Selecciona Productos';
-            // Valid State: Always 'Pagar Pedido' to start the checkout flow
-            return 'Pagar Pedido';
+        if (ticketStep === 2) {
+            const hasTakeAway = cartItems.some(i => i.consumptionMode === 'Para Llevar');
+            return hasTakeAway ? 'Pagar y Crear' : 'Abrir Ticket';
         }
-        if (ticketStep === 2) return 'Crear Ticket';
-        return '';
+        return 'Continuar';
     };
 
-    // Helper to Get Final Product List for Display
-    const getDisplayItems = () => {
-        const items = [...cartItems];
-        if (isSelectionComplete() && ticketStep === 0) {
-            // Show current selection in preview (summary row)
-            // We don't push it here, just render logic handles it
+    // --- HELPER FOR SELECTION LABEL ---
+    const getBeerSelectionLabel = () => {
+        if (!orderState.beerType) {
+            // No beer selected yet
+            if (orderState.beerVariety === 'Variado') {
+                return orderState.consumptionMode === 'Local'
+                    ? 'Ticket Abierto'
+                    : 'Variado (Constructor)';
+            }
+            return null;
         }
-        // If ticketStep > 0, we effectively "lock" the cart.
-        // We should treat currentSelection as "Added" for the view if we are in ticket mode.
-        return items;
-    };
+
+        // Beer selected
+        if (orderState.beerVariety === 'Variado') {
+            return `${orderState.beerType} (Variado)`;
+        }
+        return orderState.beerType;
+    }
 
     return (
         <div className="sales-container-v2">
 
             {/* 1. Modo de Consumo */}
-            {/* Allow changing mode for the next item even if cart is not empty */}
             <AccordionSection
                 title="Modo de Consumo"
                 isOpen={openSection === 'consumption'}
@@ -346,18 +506,16 @@ export default function SalesPage() {
                     <button
                         className={`option-btn ${orderState.consumptionMode === 'Local' ? 'selected' : ''}`}
                         onClick={() => handleConsumptionSelect('Local')}
-                        style={{ height: '100px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                        style={{ height: '80px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                     >
-                        <Store size={32} />
-                        <span>Local</span>
+                        <Store size={28} /> <span>Local</span>
                     </button>
                     <button
                         className={`option-btn ${orderState.consumptionMode === 'Para Llevar' ? 'selected' : ''}`}
                         onClick={() => handleConsumptionSelect('Para Llevar')}
-                        style={{ height: '100px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                        style={{ height: '80px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                     >
-                        <ShoppingBag size={32} />
-                        <span>Para Llevar</span>
+                        <ShoppingBag size={28} /> <span>Para Llevar</span>
                     </button>
                 </div>
             </AccordionSection>
@@ -370,15 +528,12 @@ export default function SalesPage() {
                 selectionLabel={orderState.emission ? `${orderState.emission} (${orderState.subtype})` : null}
                 headerAction={
                     <div onClick={(e) => e.stopPropagation()}>
-                        <ContainerSelector
-                            value={orderState.subtype}
-                            onChange={(val) => setOrderState(prev => ({ ...prev, subtype: val }))}
-                        />
+                        <ContainerSelector value={orderState.subtype} onChange={(val) => setOrderState(prev => ({ ...prev, subtype: val, emission: null }))} />
                     </div>
                 }
             >
                 <div className="options-grid">
-                    {emissionOptions.map(opt => (
+                    {getEmissionsForSubtype(orderState.subtype).map(opt => (
                         <button
                             key={opt}
                             className={`option-btn ${orderState.emission === opt ? 'selected' : ''}`}
@@ -395,43 +550,166 @@ export default function SalesPage() {
                 title="Tipo de Cerveza"
                 isOpen={openSection === 'beer'}
                 onToggle={() => toggleSection('beer')}
-                selectionLabel={orderState.beerType ? `${orderState.beerType} (${orderState.beerVariety})` : null}
+                selectionLabel={getBeerSelectionLabel()}
                 headerAction={<VarietyToggle />}
             >
-                <div className="options-grid">
-                    {beerTypes.map(opt => (
-                        <button
-                            key={opt}
-                            className={`option-btn ${orderState.beerType === opt ? 'selected' : ''}`}
-                            onClick={() => handleBeerSelect(opt)}
-                        >
-                            {opt}
-                        </button>
-                    ))}
-                </div>
-                {orderState.beerVariety === 'Variado' && (
-                    <p className="text-secondary text-sm margin-top-sm" style={{ marginTop: '1rem', textAlign: 'center' }}>
-                        * Selecciona la primera cerveza. El resto se agregará en Pendientes.
-                    </p>
+
+                {(orderState.beerVariety === 'Normal' || (orderState.beerVariety === 'Variado' && orderState.consumptionMode === 'Local')) ? (
+                    <>
+                        <div className="options-grid">
+                            {beerTypes.map(opt => (
+                                <button
+                                    key={opt}
+                                    className={`option-btn ${orderState.beerType === opt ? 'selected' : ''}`}
+                                    onClick={() => handleBeerSelect(opt)}
+                                >
+                                    {opt}
+                                </button>
+                            ))}
+                        </div>
+                        {/* INSTRUCTIONAL MESSAGE FOR LOCAL VARIADO */}
+                        {orderState.beerVariety === 'Variado' && orderState.consumptionMode === 'Local' && (
+                            <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'var(--bg-card-hover)', borderRadius: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                <AlertCircle size={18} style={{ flexShrink: 0, color: 'var(--accent-color)' }} />
+                                <span>Selecciona la primera cerveza. Las demás se agregarán en Pendientes.</span>
+                            </div>
+                        )}
+                    </>
+                ) : (
+                    <div style={{ textAlign: 'center', padding: '1rem' }}>
+                        {orderState.consumptionMode === 'Para Llevar' && (
+                            <>
+                                <p style={{ marginBottom: '1rem', color: 'var(--text-secondary)' }}>
+                                    Arma tu caja variada ahora.
+                                </p>
+                                <button
+                                    className="create-ticket-btn"
+                                    style={{ background: 'var(--accent-color)' }}
+                                    onClick={() => setShowMixedBuilder(true)}
+                                    disabled={!orderState.emission}
+                                >
+                                    {orderState.emission ? `Armar ${orderState.emission} Variada` : 'Selecciona Emisión Primero'}
+                                </button>
+                            </>
+                        )}
+                    </div>
                 )}
             </AccordionSection>
 
+            {/* --- MIXED BUILDER MODAL --- */}
+            {showMixedBuilder && (
+                <div className="modal-overlay">
+                    <div className="modal-content" style={{ maxWidth: '400px', width: '95%' }}>
+                        <h3 className="modal-title">Armar {orderState.emission}</h3>
+
+                        {/* Progress Bar */}
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontWeight: 600 }}>
+                                <span>Progreso</span>
+                                <span>{getMixedTotalUnits()} / {getTargetUnits()}</span>
+                            </div>
+                            <div style={{ width: '100%', height: '10px', background: 'var(--bg-card-hover)', borderRadius: '5px', overflow: 'hidden' }}>
+                                <div style={{
+                                    width: `${Math.min(100, (getMixedTotalUnits() / getTargetUnits()) * 100)}%`,
+                                    height: '100%',
+                                    background: getMixedTotalUnits() === getTargetUnits() ? '#34c759' : 'var(--accent-color)',
+                                    transition: 'width 0.3s ease'
+                                }} />
+                            </div>
+                        </div>
+
+                        {/* Beer Grid */}
+                        <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '1.5rem' }}>
+                            {beerTypes.map(beer => {
+                                const count = mixedComposition[beer] || 0;
+                                const stock = getInventory(beer, orderState.subtype);
+                                const isMaxed = getMixedTotalUnits() >= getTargetUnits();
+
+                                return (
+                                    <div key={beer} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', borderBottom: '1px solid var(--accent-light)' }}>
+                                        <div>
+                                            <div style={{ fontWeight: 500 }}>{beer}</div>
+                                            <div style={{ fontSize: '0.75rem', color: stock < 10 ? '#ef4444' : 'var(--text-secondary)' }}>Disp: {stock}</div>
+                                        </div>
+
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <button
+                                                onClick={() => removeFromMix(beer)}
+                                                disabled={count === 0}
+                                                style={{ width: '32px', height: '32px', borderRadius: '50%', border: '1px solid var(--accent-light)', background: 'transparent', color: 'var(--text-primary)' }}
+                                            >
+                                                -
+                                            </button>
+                                            <span style={{ fontWeight: 700, width: '24px', textAlign: 'center' }}>{count}</span>
+                                            <button
+                                                onClick={() => addToMix(beer)}
+                                                disabled={isMaxed || stock <= 0}
+                                                style={{ width: '32px', height: '32px', borderRadius: '50%', background: (isMaxed || stock <= 0) ? 'var(--bg-card-hover)' : 'var(--accent-color)', color: 'white', border: 'none' }}
+                                            >
+                                                +
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Live Price Preview */}
+                        <div style={{ textAlign: 'right', marginBottom: '1rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                            Precio Estimado: <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{formatCurrency(getMixedBsPrice(orderState.consumptionMode === 'Local' ? 'local' : 'standard'))} Bs</span>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '1rem' }}>
+                            <button className="modal-close-btn" onClick={() => setShowMixedBuilder(false)} style={{ background: 'var(--bg-card-hover)', color: 'var(--text-primary)' }}>
+                                Cancelar
+                            </button>
+                            <button
+                                className="modal-close-btn"
+                                onClick={confirmMixedCase}
+                                disabled={getMixedTotalUnits() !== getTargetUnits()}
+                                style={{ background: getMixedTotalUnits() === getTargetUnits() ? '#34c759' : '#ccc', color: 'white' }}
+                            >
+                                Confirmar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+
             {/* Summary / Cart Card */}
             <div className="order-summary-card">
-
                 {/* Cart List */}
-                {cartItems.length > 0 && (
+                {(cartItems.length > 0) && (
                     <div className="cart-list">
                         {cartItems.map((item) => (
                             <div key={item.id} className="cart-item-row">
-                                <span className="cart-item-info">
-                                    <b>{item.quantity}x</b> {item.emission} {item.beerType}
-                                    <span style={{ fontSize: '0.8rem', color: item.consumptionMode === 'Local' ? '#FF9C57' : '#FF9C57', marginLeft: '6px', fontWeight: 500 }}>
-                                        ({item.consumptionMode === 'Local' ? 'Local' : 'Llevar'})
+                                <div style={{ flex: 1 }}>
+                                    <span className="cart-item-info">
+                                        <b>{item.quantity}x</b> {item.emission} {item.beerVariety === 'Variado' ? 'Variada' : item.beerType}
+                                        <span style={{ fontSize: '0.8rem', color: item.consumptionMode === 'Local' ? '#FF9C57' : '#999', marginLeft: '6px', fontWeight: 500 }}>
+                                            ({item.consumptionMode === 'Local' ? 'Local' : 'Llevar'})
+                                        </span>
                                     </span>
-                                </span>
+                                    {/* Show composition details if varied */}
+                                    {item.beerVariety === 'Variado' && item.composition && (
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: '1rem' }}>
+                                            {Object.entries(item.composition).map(([b, q]) => `${q} ${b}`).join(', ')}
+                                        </div>
+                                    )}
+                                    {item.beerVariety === 'Variado' && !item.composition && (
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: '1rem', fontStyle: 'italic' }}>
+                                            * Base: {item.displayBase || item.baseBeer} ({item.subtype})
+                                        </div>
+                                    )}
+                                </div>
                                 <div style={{ display: 'flex', alignItems: 'center' }}>
-                                    <span>{formatCurrency(getBsPrice(item.beerType, item.emission, item.subtype, item.consumptionMode === 'Local' ? 'local' : 'standard') * item.quantity)} Bs</span>
+                                    <span style={{ fontWeight: 600 }}>
+                                        {item.beerVariety === 'Variado'
+                                            ? formatCurrency(item.unitPriceBs * item.quantity)
+                                            : formatCurrency(getBsPrice(item.beerType, item.emission, item.subtype, item.consumptionMode === 'Local' ? 'local' : 'standard') * item.quantity)
+                                        } Bs
+                                    </span>
                                     {!ticketStep && (
                                         <button className="cart-delete-btn" onClick={() => handleRemoveFromCart(item.id)}>
                                             <X size={16} />
@@ -443,140 +721,123 @@ export default function SalesPage() {
                     </div>
                 )}
 
-                {/* Current Active Selection (Builder) */}
-                {/* Only verify if we are in Step 0 OR if we are just showing the final list? */}
-                {/* Logic: If Step > 0, we treat Current as "Implicitly Added" for simple single-item flow, 
-                    OR we force user to add it? 
-                    Let's allow "Current Selection" to be visible as the "Active" item to add.
-                */}
-
-                {isSelectionComplete() && ticketStep === 0 && (
-                    <>
-                        <div className="summary-row">
-                            <div className="quantity-controls" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <button onClick={decreaseQuantity} className="qty-btn" style={{ width: '24px', height: '24px', borderRadius: '50%', border: '1px solid #ccc', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>-</button>
-                                <span className="summary-item"><b>{orderState.quantity}x</b></span>
-                                <button onClick={increaseQuantity} className="qty-btn" style={{ width: '24px', height: '24px', borderRadius: '50%', border: '1px solid #ccc', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
-                                <span className="summary-item" style={{ marginLeft: '8px' }}>
-                                    {orderState.beerType} ({orderState.emission})
-                                </span>
-                            </div>
-                            <span className="summary-price">
-                                {orderState.beerType && orderState.emission ?
-                                    formatCurrency(getBsPrice(orderState.beerType, orderState.emission, orderState.subtype, orderState.consumptionMode === 'Local' ? 'local' : 'standard') * orderState.quantity)
-                                    : '0'} Bs
+                {/* Current Active Selection (Only showed if NOT Variado, or if builder not open) */}
+                {isSelectionComplete() && ticketStep === 0 && (orderState.beerVariety === 'Normal' || (orderState.beerVariety === 'Variado' && orderState.consumptionMode === 'Local')) && (
+                    <div className="summary-row">
+                        <div className="quantity-controls" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <button onClick={decreaseQuantity} className="qty-btn" style={{ width: '24px', height: '24px', borderRadius: '50%', border: '1px solid var(--accent-light)', background: 'var(--bg-card)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>-</button>
+                            <span className="summary-item"><b>{orderState.quantity}x</b></span>
+                            <button onClick={increaseQuantity} className="qty-btn" style={{ width: '24px', height: '24px', borderRadius: '50%', border: '1px solid var(--accent-light)', background: 'var(--bg-card)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+                            <span className="summary-item" style={{ marginLeft: '8px' }}>
+                                {getBeerSelectionLabel() || `${orderState.beerType} (${orderState.emission})`}
                             </span>
                         </div>
+                        <span className="summary-price">
+                            {formatCurrency(
+                                (orderState.beerVariety === 'Variado' && orderState.consumptionMode === 'Local')
+                                    ? getBsPrice(orderState.beerType, orderState.emission, orderState.subtype, 'local') * orderState.quantity
+                                    : getBsPrice(orderState.beerType, orderState.emission, orderState.subtype, orderState.consumptionMode === 'Local' ? 'local' : 'standard') * orderState.quantity
+                            )} Bs
+                        </span>
+                    </div>
+                )}
 
-                        {orderState.beerVariety === 'Variado' && (
-                            <div className="summary-row" style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                                <span>+ Variado (Pendiente)</span>
-                            </div>
-                        )}
-
-                        <button className="add-item-btn" onClick={handleAddToCart}>
-                            <PlusCircle size={18} />
-                            Agregar otro producto
-                        </button>
-                    </>
+                {isSelectionComplete() && ticketStep === 0 && (orderState.beerVariety === 'Normal' || (orderState.beerVariety === 'Variado' && orderState.consumptionMode === 'Local')) && (
+                    <button className="add-item-btn" onClick={handleAddToCart}>
+                        <PlusCircle size={18} /> Agregar otro producto
+                    </button>
                 )}
 
 
-
-                {(cartItems.length > 0 || isSelectionComplete()) && (
+                {(cartItems.length > 0 || isSelectionComplete() || (orderState.beerVariety === 'Variado' && orderState.consumptionMode === 'Local' && orderState.emission && orderState.beerType)) && (
                     <div className="summary-actions">
                         <button className="delete-action" onClick={handleClearBill}>
-                            <Trash2 size={16} /> {ticketStep > 0 ? 'Cancelar Ticket' : (cartItems.length > 0 ? 'Cancelar Pedido' : 'Borrar Selección')}
+                            <Trash2 size={16} /> {ticketStep > 0 ? 'Cancelar Ticket' : 'Limpiar Todo'}
                         </button>
                     </div>
                 )}
 
                 <div className="summary-total-container" style={{ flexDirection: 'column', alignItems: 'flex-end' }}>
-                    {orderState.consumptionMode === 'Local' && (
-                        <span style={{ fontSize: '0.7rem', color: '#1A1A1A', fontWeight: 600, marginBottom: '-2px' }}>Precio Local</span>
-                    )}
-
-                    <div className="summary-total">
-                        {formatCurrency(currentTotal)} Bs
-                    </div>
-                    <div style={{
-                        fontSize: '0.85rem',
-                        color: 'black',
-                        fontWeight: 500,
-                        fontStyle: 'italic',
-                        fontFamily: 'Poppins, sans-serif',
-                        marginTop: '-5px'
-                    }}>
+                    {orderState.consumptionMode === 'Local' && <span style={{ fontSize: '0.7rem', color: 'var(--text-primary)', fontWeight: 600 }}>Precio Local</span>}
+                    <div className="summary-total">{formatCurrency(currentTotal)} Bs</div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 500, fontStyle: 'italic', marginTop: '-5px' }}>
                         {formatUsd(calculateTotalUsd())}
                     </div>
                 </div>
 
-                {/* Step 2: Payment & Info (Unified) */}
+                {/* Step 2: Payment */}
                 {ticketStep === 2 && (
                     <div className="ticket-details-form">
-
-                        {/* Show Ticket Info only if there are Local items? Or always? */}
-                        {/* Keep it consistent */}
                         <div className="ticket-info-row">
                             <span className="ticket-hash-display"># {ticketNumber}</span>
                             <span className="ticket-date">{ticketDate}</span>
                         </div>
 
-                        {/* Customer Name Input - Show if Local items exist */}
-                        {cartItems.some(i => i.consumptionMode === 'Local') && (
+                        {(cartItems.some(i => i.consumptionMode === 'Local') || (cartItems.some(i => i.beerVariety === 'Variado' && i.consumptionMode === 'Local'))) && (
                             <div className="input-group-large" style={{ marginBottom: '1rem' }}>
                                 <User size={36} strokeWidth={2.5} className="input-icon-external" />
-                                <input
-                                    type="text"
-                                    placeholder="Nombre del Cliente"
-                                    className="ticket-input-large"
-                                    value={customerName}
-                                    onChange={(e) => setCustomerName(e.target.value)}
-                                    autoFocus
-                                />
+                                <input type="text" placeholder="Nombre del Cliente" className="ticket-input-large" value={customerName} onChange={(e) => setCustomerName(e.target.value)} autoFocus />
                             </div>
                         )}
 
                         <h4 className="payment-section-title">Método de Pago</h4>
+
                         <div className="payment-methods-grid">
                             {paymentMethods.map(method => (
-                                <button
-                                    key={method}
-                                    className={`option-btn ${paymentMethod === method ? 'selected' : ''}`}
-                                    onClick={() => setPaymentMethod(method)}
-                                    style={{ fontSize: '0.8rem', padding: '0.75rem 0.25rem' }}
-                                >
-                                    {method}
-                                </button>
+                                <button key={method} className={`option-btn ${paymentMethod === method ? 'selected' : ''}`} onClick={() => setPaymentMethod(method)} style={{ fontSize: '0.8rem', padding: '0.75rem 0.25rem' }}>{method}</button>
                             ))}
                         </div>
 
                         {paymentMethod === 'Pago Movil' && (
                             <div className="input-group-large">
                                 <Hash size={36} strokeWidth={2.5} className="input-icon-external" />
-                                <input
-                                    type="text"
-                                    placeholder="Nro Referencia (Solo números)"
-                                    className="ticket-input-large"
-                                    value={paymentReference}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        if (/^\d*$/.test(val)) {
-                                            setPaymentReference(val);
-                                        }
-                                    }}
-                                    inputMode="numeric"
-                                />
+                                <input type="text" placeholder="Referencia" className="ticket-input-large" value={paymentReference} onChange={(e) => { if (/^\d*$/.test(e.target.value)) setPaymentReference(e.target.value); }} inputMode="numeric" />
                             </div>
                         )}
+
+                        {!paymentMethod && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '1rem' }}>
+                                <AlertCircle size={18} />
+                                <span>Selecciona un método de pago para continuar.</span>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* QUICK OPEN TAB (ONLY FOR LOCAL) */}
+                {orderState.consumptionMode === 'Local' && !cartItems.length && !orderState.beerType && (
+                    <div style={{ marginBottom: '1.5rem', animation: 'fadeIn 0.3s ease' }}>
+                        <button
+                            className="create-ticket-btn"
+                            style={{
+                                background: 'transparent',
+                                border: '2px dashed var(--accent-light)',
+                                color: 'var(--text-secondary)',
+                                height: '60px'
+                            }}
+                            onClick={() => {
+                                setTicketNumber(Math.floor(1000 + Math.random() * 9000));
+                                setTicketStep(2); // Jump to name input
+                            }}
+                        >
+                            <Store size={20} /> Solo Abrir Carta (Sin productos)
+                        </button>
                     </div>
                 )}
 
                 <button
                     className={`create-ticket-btn ${ticketStep > 0 ? 'confirm-mode' : ''}`}
                     onClick={ticketStep === 0 ? handleInitialCreateClick : handleFinalConfirm}
-                    disabled={!isSelectionComplete() && cartItems.length === 0}
-                    style={{ opacity: (!isSelectionComplete() && cartItems.length === 0) ? 0.5 : 1, cursor: (!isSelectionComplete() && cartItems.length === 0) ? 'not-allowed' : 'pointer' }}
+                    disabled={
+                        (ticketStep === 0 && !cartItems.length && !isSelectionComplete() && !(orderState.beerVariety === 'Variado' && orderState.consumptionMode === 'Local' && orderState.emission && orderState.beerType)) ||
+                        (ticketStep === 2 && !paymentMethod) // Explicitly disable if step 2 and no payment
+                    }
+                    style={{
+                        opacity: (
+                            (ticketStep === 0 && !cartItems.length && !isSelectionComplete() && !(orderState.beerVariety === 'Variado' && orderState.consumptionMode === 'Local' && orderState.emission && orderState.beerType)) ||
+                            (ticketStep === 2 && !paymentMethod)
+                        ) ? 0.5 : 1
+                    }}
                 >
                     {getButtonText()}
                 </button>
@@ -586,85 +847,83 @@ export default function SalesPage() {
             {showModal && (
                 <div className="modal-overlay">
                     <div className="modal-content">
-                        <svg width="0" height="0" style={{ position: 'absolute' }}>
-                            <defs>
-                                <linearGradient id="icon-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                                    <stop offset="0%" stopColor="#FF9C57" />
-                                    <stop offset="100%" stopColor="#E65900" />
-                                </linearGradient>
-                            </defs>
-                        </svg>
-                        <CheckCircle className="modal-icon" style={{ stroke: 'url(#icon-gradient)' }} />
-                        <h3 className="modal-title">
-                            {cartItems.some(i => i.consumptionMode === 'Local') && cartItems.some(i => i.consumptionMode === 'Para Llevar') ? (
-                                <span>Pedido Mixto Pagado.<br />Local &rarr; Pendientes.</span>
-                            ) : (
-                                cartItems.some(i => i.consumptionMode === 'Local') ?
-                                    <>Pedido Pagado. <br /><span style={{ fontSize: '0.9rem', color: '#666', fontWeight: 'normal' }}>Agregado a <span className="modal-link" onClick={navigateToPending}>Pendientes</span></span></> :
-                                    <>¡Pedido Pagado Exitosamente!</>
-                            )}
-                        </h3>
-                        <button className="modal-close-btn" onClick={closeModal}>
-                            Cerrar y Nuevo Pedido
-                        </button>
+                        <CheckCircle className="modal-icon" size={64} color="#34c759" style={{ marginBottom: '1rem' }} />
+                        <h3 className="modal-title">¡Venta Exitosa!</h3>
+                        <button className="modal-close-btn" onClick={closeModal}>Cerrar y Nuevo Pedido</button>
                     </div>
                 </div>
             )}
 
-            {/* Reset Confirmation Modal */}
-            {showResetModal && (
+            {/* Stock Error Modal - THEMED WITH RED ICON */}
+            {stockError && (
                 <div className="modal-overlay">
-                    <div className="modal-content">
-                        {/* Reusing existing gradient definition but we need to ensure it renders if the other modal is not open. 
-                            Actually the other modal code defines the gradient in its SVG. 
-                            We should define the gradient here too or move it to a shared place?
-                            The other modal only renders if showModal is true. So we definitely need to define the gradient here.
-                        */}
-                        <svg width="0" height="0" style={{ position: 'absolute' }}>
-                            <defs>
-                                <linearGradient id="reset-icon-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                                    <stop offset="0%" stopColor="#FF9C57" />
-                                    <stop offset="100%" stopColor="#E65900" />
-                                </linearGradient>
-                            </defs>
-                        </svg>
+                    <div className="modal-content" style={{ textAlign: 'center', maxWidth: '360px', borderRadius: '20px' }}>
 
-                        {/* Custom Question Marks Icon */}
-                        <div style={{
-                            background: 'rgba(255, 156, 87, 0.15)',
-                            width: '80px', height: '80px',
-                            borderRadius: '50%',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            margin: '0 auto 1rem auto',
-                            boxShadow: '0 0 0 8px rgba(255, 156, 87, 0.05)'
-                        }}>
-                            <span style={{ fontSize: '3rem', fontWeight: 600, background: 'linear-gradient(180deg, #FF9C57 0%, #E65900 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', lineHeight: 1 }}>?</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '1.5rem' }}>
+                            <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1rem' }}>
+                                <AlertCircle size={32} color="#ef4444" />
+                            </div>
+                            <h3 className="modal-title" style={{ color: '#ef4444', margin: 0, fontSize: '1.25rem' }}>Stock Insuficiente</h3>
                         </div>
 
-                        <h3 className="modal-title" style={{ marginBottom: '2rem' }}>
-                            ¿Seguro que quieres empezar de nuevo?
-                        </h3>
+                        <div style={{
+                            background: 'var(--bg-card-hover)',
+                            borderRadius: '16px',
+                            padding: '1.25rem',
+                            marginBottom: '1.5rem',
+                            textAlign: 'left',
+                            border: '1px solid var(--accent-light)'
+                        }}>
+                            <h4 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', fontWeight: 700, borderBottom: '1px solid var(--accent-light)', paddingBottom: '0.75rem', color: 'var(--text-primary)' }}>
+                                {stockError.product}
+                            </h4>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', width: '100%' }}>
+                            <div style={{ display: 'grid', gap: '0.75rem', fontSize: '0.95rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <span style={{ color: 'var(--text-secondary)' }}>Requerido</span>
+                                    <span style={{ fontWeight: 600 }}>{stockError.required} Uds</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <span style={{ color: 'var(--text-secondary)' }}>Disponible</span>
+                                    <span style={{ color: '#ef4444', fontWeight: 700 }}>{stockError.available} Uds</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed var(--accent-light)', paddingTop: '0.75rem' }}>
+                                    <span style={{ color: 'var(--text-secondary)' }}>Faltante</span>
+                                    <span style={{ fontWeight: 700 }}>{stockError.required - stockError.available} Uds</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button className="modal-close-btn" onClick={() => setStockError(null)} style={{ width: '100%', padding: '1rem', fontSize: '1rem', borderRadius: '12px', background: 'var(--bg-card-hover)', color: 'var(--text-primary)', border: 'none' }}>Entendido</button>
+                    </div>
+                </div>
+            )}
+            {showResetModal && (
+                <div className="modal-overlay">
+                    <div className="modal-content" style={{ width: '320px', padding: '2rem' }}>
+                        <h3 className="modal-title" style={{ marginBottom: '0.5rem' }}>¿Reiniciar Venta?</h3>
+                        <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
+                            Se perderá la selección actual.
+                        </p>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                             <button
                                 className="modal-close-btn"
                                 onClick={confirmReset}
-                                style={{ background: 'linear-gradient(180deg, #FF9C57 0%, #E65900 100%)', color: 'white' }}
+                                style={{ margin: 0, background: 'var(--bg-card-hover)', color: '#ef4444', border: '1px solid #ef4444' }}
                             >
-                                Sí
+                                Sí, Reiniciar
                             </button>
                             <button
-                                className="modal-close-btn"
+                                className="create-ticket-btn"
                                 onClick={() => setShowResetModal(false)}
-                                style={{ background: '#f5f5f7', color: '#333' }}
+                                style={{ margin: 0, fontSize: '1rem', padding: '0.75rem' }}
                             >
-                                No
+                                No, Cancelar
                             </button>
                         </div>
                     </div>
                 </div>
             )}
-
         </div>
     );
 }

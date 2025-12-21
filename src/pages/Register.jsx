@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase } from '../supabaseClient';
+// import { supabase } from '../supabaseClient';
 import { useNavigate, Link } from 'react-router-dom';
 import { UserPlus, Store, Eye, EyeOff, PartyPopper } from 'lucide-react';
 
@@ -27,6 +27,13 @@ export default function Register() {
             return;
         }
 
+        // MOCK REGISTER
+        setTimeout(() => {
+            setShowSuccess(true);
+            setLoading(false);
+        }, 1000);
+
+        /*
         try {
             // 2. Preparamos la metadata con cuidado
             const metadata = {
@@ -57,6 +64,7 @@ export default function Register() {
         } finally {
             setLoading(false);
         }
+        */
     };
 
     return (
