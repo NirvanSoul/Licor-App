@@ -97,7 +97,7 @@ export const ProductProvider = ({ children }) => {
 
                 // 3. Inventory (Uses product_id)
                 const { data: inv } = await fetchInventory(organizationId);
-                if (inv) {
+                if (Array.isArray(inv)) {
                     const invMap = {};
                     inv.forEach(item => {
                         const productName = currentIdMap[item.product_id];
@@ -110,7 +110,7 @@ export const ProductProvider = ({ children }) => {
 
                 // 4. Prices
                 const { data: pr } = await fetchPrices(organizationId);
-                if (pr) {
+                if (Array.isArray(pr)) {
                     const priceMap = {};
                     pr.forEach(p => {
                         const productName = currentIdMap[p.product_id];
@@ -125,7 +125,7 @@ export const ProductProvider = ({ children }) => {
                 // 5. Conversions
                 // Mock conversions from local storage for now if not in API
                 const storedConversions = loadFromStorage('mock_conversions', []);
-                if (storedConversions) {
+                if (Array.isArray(storedConversions)) {
                     const convMap = {};
                     storedConversions.forEach(c => {
                         convMap[`${c.emission}_${c.subtype}`] = c.units;
@@ -281,6 +281,119 @@ export const ProductProvider = ({ children }) => {
         }
 
         return merged;
+    };
+
+    // --- COST & NET PROFIT MANAGEMENT ---
+    const [costPrices, setCostPrices] = useState({});
+
+    // Load costs initially
+    useEffect(() => {
+        if (!organizationId || Object.keys(productMap).length === 0) return;
+
+        const storedCosts = loadFromStorage('mock_cost_prices', []);
+        if (storedCosts && storedCosts.length > 0) {
+            const costMap = {};
+            // Reverse product map locally for lookup
+            const idToName = {};
+            Object.entries(productMap).forEach(([name, id]) => {
+                idToName[id] = name;
+            });
+
+            storedCosts.forEach(c => {
+                const name = idToName[c.product_id] || c.product_name; // Fallback to name if ID mapping fails
+                if (name) {
+                    costMap[`${name}_${c.emission}_${c.subtype}`] = Number(c.cost);
+                }
+            });
+            setCostPrices(costMap);
+        }
+    }, [organizationId, productMap]); // Dependency on productMap ensures we have mapping ready
+
+    const updateCostPrice = async (beer, emission, subtype, cost) => {
+        const key = `${beer}_${emission}_${subtype}`;
+        const newCost = parseFloat(cost);
+        setCostPrices(prev => ({ ...prev, [key]: newCost }));
+
+        const productId = productMap[beer];
+        if (productId) {
+            // Mock Upsert Cost
+            const costs = loadFromStorage('mock_cost_prices', []);
+            const existingIndex = costs.findIndex(c =>
+                c.product_id === productId &&
+                c.emission === emission &&
+                c.subtype === subtype
+            );
+
+            const costData = {
+                organization_id: organizationId,
+                product_id: productId,
+                product_name: beer, // Store name for easier mock hydration
+                emission,
+                subtype,
+                cost: newCost
+            };
+
+            if (existingIndex >= 0) {
+                costs[existingIndex] = { ...costs[existingIndex], ...costData };
+            } else {
+                costs.push({ ...costData, id: Date.now().toString() });
+            }
+            localStorage.setItem('mock_cost_prices', JSON.stringify(costs));
+        }
+    };
+
+    const getCostPrice = (beer, emission, subtype) => {
+        const key = `${beer}_${emission}_${subtype}`;
+        return costPrices[key] || 0;
+    };
+
+    // Helper to get the best "Unit Cost" for calculations
+    const getBestUnitCost = (beer, subtype) => {
+        // Priority: Caja -> Media Caja -> Six Pack -> Unidad
+        // We calculate down to unit cost
+        const emissionsToCheck = ['Caja', 'Media Caja', 'Six Pack', 'Unidad'];
+
+        for (const em of emissionsToCheck) {
+            const cost = getCostPrice(beer, em, subtype);
+            if (cost > 0) {
+                const units = getUnitsPerEmission(em, subtype);
+                return cost / units;
+            }
+        }
+        return 0;
+    };
+
+    const getInventoryAssetValue = () => {
+        let totalValue = 0;
+        // Inventory keys are `${beer}_${subtype}` -> quantity (units)
+        Object.entries(inventory).forEach(([key, quantity]) => {
+            if (quantity <= 0) return;
+
+            // Split key carefully
+            // Assuming format Name_Subtype. 
+            // If Name has underscore, we fail?
+            // Existing logic in `checkAggregateStock` implies `inventory` keys are constructed reliably?
+            // Let's use the known `beerTypes` to match safely.
+
+            let beer = '';
+            let subtype = '';
+
+            // Find matching beer name from key start
+            const match = beerTypes.find(b => key.startsWith(b + '_'));
+            if (match) {
+                beer = match;
+                subtype = key.slice(beer.length + 1);
+            } else {
+                // Fallback split
+                const parts = key.split('_');
+                subtype = parts.pop();
+                beer = parts.join('_');
+            }
+
+            const unitCost = getBestUnitCost(beer, subtype);
+            totalValue += quantity * unitCost;
+        });
+        return totalValue;
     };
 
     // --- PRICES & CONVERSIONS ---
@@ -694,24 +807,36 @@ export const ProductProvider = ({ children }) => {
             hour: '2-digit', minute: '2-digit', hour12: true
         });
 
-        const movements = [];
         let totalCount = 0;
+        const movements = [];
+        // Safe helper for processing waste without crashing
+        try {
+            const promises = Object.entries(pendingWaste).map(async ([key, quantity]) => {
+                const parts = key.split('_');
+                // Safety check for key format
+                if (parts.length < 2) return;
 
-        const promises = Object.entries(pendingWaste).map(async ([key, quantity]) => {
-            const parts = key.split('_');
-            const emission = parts.pop();
-            const subtype = parts.pop();
-            const beer = parts.join('_');
+                const emission = parts.pop();
+                const subtype = parts.pop();
+                const beer = parts.join('_');
 
-            const totalUnits = quantity * getUnitsPerEmission(emission, subtype);
+                const totalUnits = quantity * (getUnitsPerEmission ? getUnitsPerEmission(emission, subtype) : 1);
 
-            await deductStock(beer, emission, subtype, quantity);
+                // If deductStock fails, catch it so we don't crash everything
+                try {
+                    if (deductStock) await deductStock(beer, emission, subtype, quantity);
+                } catch (e) {
+                    console.error("Error deducting stock in commitWaste", e);
+                }
 
-            totalCount += totalUnits;
-            movements.push({ beer, subtype, emission, quantity, totalUnits });
-        });
+                totalCount += totalUnits;
+                movements.push({ beer, subtype, emission, quantity, totalUnits });
+            });
 
-        await Promise.all(promises);
+            await Promise.all(promises);
+        } catch (err) {
+            console.error("Error in commitWaste processing", err);
+        }
 
         const report = {
             id: Date.now(),
@@ -725,6 +850,7 @@ export const ProductProvider = ({ children }) => {
         setPendingWaste({});
         return report;
     };
+
 
     // NEW Direct Waste Reporting
     const reportWaste = async (beer, subtype, quantity) => {
@@ -804,8 +930,15 @@ export const ProductProvider = ({ children }) => {
             commitWaste,
             reportWaste, // Exposed
             getPendingWaste,
-            getPendingWaste,
             breakageHistory,
+            emissionOptions,
+            subtypes,
+            conversions,
+            // Cost & Profit
+            costPrices,
+            updateCostPrice,
+            getCostPrice,
+            getInventoryAssetValue,
             // Currency Config
             mainCurrency,
             setMainCurrency,

@@ -5,7 +5,8 @@ import { Package, CheckCircle, Trash2 } from 'lucide-react';
 export default function InventoryFab() {
     const {
         pendingInventory, commitInventory, clearPendingInventory, getUnitsPerEmission,
-        pendingWaste = {}, commitWaste = async () => ({}), clearPendingWaste = () => { }
+        pendingWaste = {}, commitWaste = async () => ({}), clearPendingWaste = () => { },
+        getCostPrice, updateCostPrice
     } = useProduct();
 
     const [showSummary, setShowSummary] = useState(false);
@@ -34,21 +35,58 @@ export default function InventoryFab() {
     const isWasteAction = totalWasteItems > 0;
     const activeTotal = isWasteAction ? totalWasteItems : totalInventoryItems;
 
+    const [showCostModal, setShowCostModal] = useState(false);
+    const [costInputs, setCostInputs] = useState({}); // { key: cost }
+
     if (activeTotal === 0 && !showSummary && !showConfirm) return null;
 
     const handleClick = () => {
         setShowConfirm(true);
     };
 
+
     const handleConfirm = async () => {
-        let report;
+        // If it's waste, just do it (or we could add cost to waste report? No, waste uses existing avg cost usually)
         if (isWasteAction) {
-            report = await commitWaste();
-        } else {
-            report = await commitInventory();
+            const report = await commitWaste();
+            setLastReport(report);
+            setShowConfirm(false);
+            setShowSummary(true);
+            return;
         }
+
+        // If Adding Stock -> Show Cost Modal
+        // Pre-fill costs
+        const initialCosts = {};
+        Object.keys(pendingInventory).forEach(key => {
+            const parts = key.split('_');
+            const emission = parts.pop();
+            const subtype = parts.pop();
+            const beer = parts.join('_');
+            const currentCost = getCostPrice(beer, emission, subtype); // Scope check needed
+            initialCosts[key] = currentCost || 0;
+        });
+        setCostInputs(initialCosts);
+
+        setShowConfirm(false); // Close simple confirm
+        setShowCostModal(true); // Open cost input
+    };
+
+    const handleFinalCommit = async () => {
+        // 1. Update Costs
+        for (const [key, cost] of Object.entries(costInputs)) {
+            const parts = key.split('_');
+            const emission = parts.pop();
+            const subtype = parts.pop();
+            const beer = parts.join('_');
+
+            await updateCostPrice(beer, emission, subtype, cost);
+        }
+
+        // 2. Commit Inventory
+        const report = await commitInventory();
         setLastReport(report);
-        setShowConfirm(false);
+        setShowCostModal(false);
         setShowSummary(true);
     };
 
@@ -62,6 +100,11 @@ export default function InventoryFab() {
         setShowConfirm(false);
     }
 
+    // Auto-focus helper for inputs?
+    const handleCostChange = (key, val) => {
+        setCostInputs(prev => ({ ...prev, [key]: val }));
+    };
+
     const handleClose = () => {
         setShowSummary(false);
         setLastReport(null);
@@ -70,7 +113,7 @@ export default function InventoryFab() {
     return (
         <>
             {/* Extended FAB with Text when items actice */}
-            {activeTotal !== 0 && !showSummary && !showConfirm && (
+            {activeTotal !== 0 && !showSummary && !showConfirm && !showCostModal && (
                 <button
                     onClick={handleClick}
                     style={{
@@ -115,7 +158,109 @@ export default function InventoryFab() {
                 </button>
             )}
 
-            {/* Confirmation Modal */}
+            {/* COST INPUT MODAL (NEW) */}
+            {showCostModal && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.85)', zIndex: 2100,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem',
+                    backdropFilter: 'blur(5px)'
+                }}>
+                    <div style={{
+                        background: 'var(--bg-card)', borderRadius: '24px', padding: '1.5rem',
+                        width: '100%', maxWidth: '400px', maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+                        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+                        border: '1px solid var(--border-color)'
+                    }}>
+                        <div style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
+                            <div style={{
+                                width: '56px', height: '56px', background: 'rgba(16, 185, 129, 0.1)',
+                                borderRadius: '50%', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                margin: '0 auto 10px auto'
+                            }}>
+                                <span style={{ fontSize: '24px', fontWeight: 800 }}>$</span>
+                            </div>
+                            <h3 style={{ fontSize: '1.2rem', fontWeight: 800 }}>Precio de Costo</h3>
+                            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                Ingresa el costo unitario de los productos que estás agregando.
+                            </p>
+                        </div>
+
+                        <div className="custom-scrollbar" style={{ overflowY: 'auto', flex: 1, marginBottom: '1.5rem', paddingRight: '4px' }}>
+                            {Object.entries(pendingInventory).map(([key, qty]) => {
+                                const parts = key.split('_');
+                                const emission = parts.pop();
+                                const subtype = parts.pop();
+                                const beer = parts.join('_');
+                                const totalCost = (costInputs[key] || 0) * qty;
+
+                                return (
+                                    <div key={key} style={{
+                                        display: 'flex', flexDirection: 'column', gap: '8px',
+                                        background: 'var(--bg-input)', padding: '12px', borderRadius: '16px', marginBottom: '10px',
+                                        border: '1px solid var(--border-color)'
+                                    }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <div>
+                                                <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{beer}</div>
+                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{qty} {emission} ({subtype})</div>
+                                            </div>
+                                            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                                                Total: ${totalCost.toFixed(2)}
+                                            </div>
+                                        </div>
+
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <div style={{ flex: 1, position: 'relative' }}>
+                                                <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', fontWeight: 600 }}>$</span>
+                                                <input
+                                                    type="number"
+                                                    value={costInputs[key] || ''}
+                                                    onChange={(e) => handleCostChange(key, e.target.value)}
+                                                    placeholder="0.00"
+                                                    style={{
+                                                        width: '100%', padding: '10px 10px 10px 24px', borderRadius: '10px',
+                                                        border: '1px solid var(--border-color)', outline: 'none',
+                                                        background: 'var(--bg-card)', color: 'var(--text-primary)',
+                                                        fontWeight: 700, fontSize: '1rem'
+                                                    }}
+                                                />
+                                            </div>
+                                            <div style={{ fontSize: '0.8rem', whiteSpace: 'nowrap', opacity: 0.6 }}>
+                                                / {emission.toLowerCase().replace('unidades', 'ud')}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button
+                                onClick={() => setShowCostModal(false)}
+                                style={{
+                                    flex: 1, padding: '14px', borderRadius: '12px', border: 'none',
+                                    background: 'var(--bg-input)', color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer'
+                                }}
+                            >
+                                Atrás
+                            </button>
+                            <button
+                                onClick={handleFinalCommit}
+                                style={{
+                                    flex: 2, padding: '14px', borderRadius: '12px', border: 'none',
+                                    background: '#10b981', color: 'white', fontWeight: 700, cursor: 'pointer',
+                                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.4)'
+                                }}
+                            >
+                                Confirmar y Guardar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Confirmation Modal (Simple / Redirect for Waste) */}
             {showConfirm && (
                 <div style={{
                     position: 'fixed',
@@ -144,7 +289,7 @@ export default function InventoryFab() {
                         <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
                             {isWasteAction
                                 ? `Estás reportando ${activeTotal} unidades dañadas/rotas. Se descontarán del inventario.`
-                                : `Estás a punto de actualizar el stock con ${activeTotal} unidades.`
+                                : `Estás a punto de actualizar el stock con ${activeTotal} unidades. Al continuar, podrás definir el costo de adquisición.`
                             }
                         </p>
                         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
@@ -177,7 +322,7 @@ export default function InventoryFab() {
                                     boxShadow: '0 4px 6px rgba(255, 156, 87, 0.2)'
                                 }}
                             >
-                                Confirmar
+                                Continuar
                             </button>
                         </div>
                         <button

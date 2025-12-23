@@ -29,7 +29,12 @@ const getStore = (key, initial) => {
             }
             return [];
         }
-        return JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(initial) && !Array.isArray(parsed)) {
+            console.warn(`Store key ${key} expected array but got:`, parsed);
+            return initial;
+        }
+        return parsed;
     } catch (e) {
         console.error(`Error loading ${key}`, e);
         return initial || [];
@@ -81,7 +86,7 @@ export const fetchInventory = async (organizationId) => {
     const products = getStore(COLLECTION.PRODUCTS, initialProducts);
 
     // Join logic simulation
-    const joined = inventory.map(item => {
+    const joined = (Array.isArray(inventory) ? inventory : []).map(item => {
         const prod = products.find(p => p.id === item.product_id);
         return {
             ...item,

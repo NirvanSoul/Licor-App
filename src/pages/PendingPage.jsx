@@ -293,10 +293,11 @@ export default function PendingPage() {
 
                     <button
                         onClick={() => setShowWasteModal(true)}
+                        className="waste-report-btn"
                         style={{
-                            background: '#FFF1F2',
-                            color: '#BE123C',
-                            border: '1px solid #FDA4AF',
+                            background: 'var(--bg-card)',
+                            color: '#EF4444',
+                            border: '1px solid #ef444440',
                             padding: '0 1.25rem',
                             borderRadius: '12px',
                             fontSize: '0.85rem',
@@ -444,7 +445,7 @@ export default function PendingPage() {
                     <div className="pending-modal-content" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
                         <div className="pending-modal-header">
                             <div>
-                                <h3 className="pending-modal-title" style={{ color: '#BE123C' }}>Reportar Merma</h3>
+                                <h3 className="pending-modal-title" style={{ color: '#EF4444' }}>Reportar Botella Rota</h3>
                                 <p className="pending-modal-subtitle">Registra botellas rotas o daños</p>
                             </div>
                             <button className="close-btn" onClick={() => setShowWasteModal(false)}>
@@ -495,13 +496,13 @@ export default function PendingPage() {
                                 disabled={!wasteSelection.beer}
                                 style={{
                                     width: '100%',
-                                    background: !wasteSelection.beer ? 'var(--bg-card-hover)' : '#BE123C',
+                                    background: !wasteSelection.beer ? 'var(--bg-card-hover)' : '#EF4444',
                                     color: 'white',
                                     opacity: !wasteSelection.beer ? 0.5 : 1
                                 }}
                                 onClick={handleReportWaste}
                             >
-                                Confirmar Merma
+                                Confirmar Reporte
                             </button>
                         </div>
                     </div>
