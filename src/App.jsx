@@ -39,17 +39,20 @@ function App() {
                 <NotificationToast />
                 <DevTools />
                 <Routes>
-                  {/* Public Routes - All routes are public now in Mock Mode */}
-                  {/* <Route path="/login" element={<Login />} /> */}
-                  {/* <Route path="/register" element={<Register />} /> */}
-                  {/* <Route path="/complete-registration" element={<CompleteRegistration />} /> */}
+                  {/* Public Routes */}
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/register" element={<Register />} />
+                  <Route path="/complete-registration" element={<CompleteRegistration />} />
 
-                  <Route path="/" element={<MainLayout />}>
-                    <Route index element={<Navigate to="/vender" replace />} />
-                    <Route path="vender" element={<SalesPage />} />
-                    <Route path="caja" element={<CashPage />} />
-                    <Route path="pendientes" element={<PendingPage />} />
-                    <Route path="ajustes" element={<SettingsPage />} />
+                  {/* Protected Routes */}
+                  <Route element={<PrivateRoute />}>
+                    <Route path="/" element={<MainLayout />}>
+                      <Route index element={<Navigate to="/vender" replace />} />
+                      <Route path="vender" element={<SalesPage />} />
+                      <Route path="caja" element={<CashPage />} />
+                      <Route path="pendientes" element={<PendingPage />} />
+                      <Route path="ajustes" element={<SettingsPage />} />
+                    </Route>
                   </Route>
                 </Routes>
               </BrowserRouter>

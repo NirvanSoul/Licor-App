@@ -3,7 +3,7 @@ import { useProduct } from '../context/ProductContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNotification } from '../context/NotificationContext';
-// import { supabase } from '../supabaseClient';
+import { supabase } from '../supabaseClient';
 import { Trash2, Plus, Save, ChevronRight, ChevronLeft, CircleDollarSign, Users, Package, Star, Box, Send, LogOut, Moon, Sun, Store, ShoppingBag, Search, ChevronDown, ChevronUp, X, Pencil } from 'lucide-react';
 import AccordionSection from '../components/AccordionSection';
 import StockManager from '../components/StockManager';
@@ -615,7 +615,7 @@ export default function SettingsPage() {
         mainCurrency, setMainCurrency
     } = useProduct();
 
-    const { user, role, organizationId, organizationName, signOut } = useAuth();
+    const { user, role, organizationId, organizationName, logout } = useAuth();
     const { theme, toggleTheme } = useTheme();
     const { showNotification } = useNotification();
 
@@ -634,6 +634,42 @@ export default function SettingsPage() {
     const [openSections, setOpenSections] = useState({ beers: true });
     const [showColorPicker, setShowColorPicker] = useState(false);
     const [pickerPos, setPickerPos] = useState({ top: 0, left: 0 });
+
+    // Invite State (Already declared above)
+
+    // --- Actions ---
+
+    const handleInvite = async (e) => {
+        e.preventDefault();
+        setInviteStatus('loading');
+
+        try {
+            // 1. Validate
+            if (!inviteEmail) throw new Error("Email requerido");
+
+            // 2. Insert into organization_invites
+            const { error: inviteError } = await supabase
+                .from('organization_invites')
+                .insert([{
+                    email: inviteEmail,
+                    organization_id: organizationId,
+                    role: inviteRole || 'EMPLOYEE'
+                }]);
+
+            if (inviteError) throw inviteError;
+
+            showNotification(`Invitación enviada a ${inviteEmail}`, 'success');
+            setInviteEmail('');
+            setInviteStatus('success');
+            setTimeout(() => setInviteStatus('idle'), 3000);
+
+        } catch (err) {
+            console.error(err);
+            showNotification(err.message || "Error enviando invitación", 'error');
+            setInviteStatus('error');
+        }
+    };
+
     const [searchQuery, setSearchQuery] = useState('');
     const [isEditMode, setIsEditMode] = useState(false); // NEW: Toggle for Edit Mode in Dashboard
 
@@ -1063,21 +1099,62 @@ export default function SettingsPage() {
                                 </p>
                             </div>
                             {/* Invite Logic */}
-                            {(role === 'OWNER' || !role) && (
+                            {(role === 'OWNER' || role === 'master' || !role) && (
                                 <div style={{ background: 'var(--bg-card-hover)', borderRadius: '16px', padding: '1.5rem', marginBottom: '2rem', textAlign: 'left' }}>
                                     <h3 style={{ fontSize: '1rem', marginBottom: '1rem', fontWeight: 600 }}>Invitar Nuevo Usuario</h3>
                                     <form onSubmit={handleInvite} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                         <div>
-                                            <label style={{ fontSize: '0.8rem', color: '#666', marginBottom: '4px', display: 'block' }}>Email</label>
-                                            <input type="email" placeholder="usuario@email.com" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required className="ticket-input-large" />
+                                            <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>Email</label>
+                                            <input
+                                                type="email"
+                                                placeholder="usuario@email.com"
+                                                value={inviteEmail}
+                                                onChange={(e) => setInviteEmail(e.target.value)}
+                                                required
+                                                className="ticket-input-large"
+                                                style={{
+                                                    background: 'var(--bg-app)',
+                                                    color: 'var(--text-primary)',
+                                                    border: '1px solid var(--accent-light)'
+                                                }}
+                                            />
                                         </div>
-                                        <button type="submit" disabled={inviteStatus === 'loading'} style={{ background: '#000', color: 'white', border: 'none', borderRadius: '12px', padding: '1rem', fontWeight: 600 }}>
+                                        <div>
+                                            <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>Rol</label>
+                                            <select
+                                                value={inviteRole}
+                                                onChange={(e) => setInviteRole(e.target.value)}
+                                                className="ticket-input-large"
+                                                style={{
+                                                    width: '100%',
+                                                    background: 'var(--bg-app)',
+                                                    color: 'var(--text-primary)',
+                                                    border: '1px solid var(--accent-light)'
+                                                }}
+                                            >
+                                                <option value="EMPLOYEE">Empleado</option>
+                                                <option value="OWNER">Administrador</option>
+                                            </select>
+                                        </div>
+                                        <button
+                                            type="submit"
+                                            disabled={inviteStatus === 'loading'}
+                                            style={{
+                                                background: 'var(--text-primary)',
+                                                color: 'var(--bg-card)',
+                                                border: 'none',
+                                                borderRadius: '12px',
+                                                padding: '1rem',
+                                                fontWeight: 600,
+                                                cursor: 'pointer'
+                                            }}
+                                        >
                                             {inviteStatus === 'loading' ? '...' : 'Invitar'}
                                         </button>
                                     </form>
                                 </div>
                             )}
-                            <button onClick={signOut} style={{ background: '#fee2e2', color: '#991b1b', padding: '1rem', borderRadius: '16px', border: 'none', width: '100%', fontWeight: 600 }}>Cerrar Sesión</button>
+                            <button onClick={logout} style={{ background: '#fee2e2', color: '#991b1b', padding: '1rem', borderRadius: '16px', border: 'none', width: '100%', fontWeight: 600, cursor: 'pointer' }}>Cerrar Sesión</button>
                         </div>
                     </div>
                 )

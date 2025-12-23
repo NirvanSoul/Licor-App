@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-// import { supabase } from '../supabaseClient';
+import { supabase } from '../supabaseClient';
 import { useNavigate, Link } from 'react-router-dom';
 import { UserPlus, Store, Eye, EyeOff, PartyPopper } from 'lucide-react';
 
@@ -27,13 +27,6 @@ export default function Register() {
             return;
         }
 
-        // MOCK REGISTER
-        setTimeout(() => {
-            setShowSuccess(true);
-            setLoading(false);
-        }, 1000);
-
-        /*
         try {
             // 2. Preparamos la metadata con cuidado
             const metadata = {
@@ -45,17 +38,41 @@ export default function Register() {
             console.log('Enviando registro a Supabase:', metadata);
 
             // 3. Enviamos a Supabase
-            const { data, error: authError } = await supabase.auth.signUp({
+            const { data: authData, error: authError } = await supabase.auth.signUp({
                 email: email,
                 password: password,
                 options: {
-                    data: metadata, // Aquí viaja la información para el Trigger SQL
+                    data: metadata, // Aquí viaja la información para el Trigger SQL (si se usa)
                 },
             });
 
             if (authError) throw authError;
 
-            // 4. Éxito
+            // 4. Lógica Manual de Respaldo por si el Trigger falla o es lento o si requerimos insercion explicita
+            // Si hay sesión activa (porque Email Confirm está apagado o es auto-login)
+            if (authData.session && isOwner && liquorStoreName) {
+                const userId = authData.user.id;
+
+                // A. Crear Organización
+                const { data: orgData, error: orgError } = await supabase
+                    .from('organizations')
+                    .insert([{ name: liquorStoreName }])
+                    .select()
+                    .single();
+
+                if (!orgError && orgData) {
+                    // B. Actualizar Perfil para ser Master de esa Org
+                    await supabase
+                        .from('profiles')
+                        .update({
+                            role: 'master',
+                            organization_id: orgData.id
+                        })
+                        .eq('id', userId);
+                }
+            }
+
+            // 5. Éxito
             setShowSuccess(true);
 
         } catch (err) {
@@ -64,7 +81,6 @@ export default function Register() {
         } finally {
             setLoading(false);
         }
-        */
     };
 
     return (

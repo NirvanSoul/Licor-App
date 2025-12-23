@@ -5,7 +5,7 @@ import { useNotification } from './NotificationContext';
 import {
     fetchProducts, createProduct, updateProduct,
     fetchInventory, upsertInventory,
-    fetchPrices, // upsertPrice removed from import if used locally or we implement helper
+    fetchPrices, upsertPrice,
     fetchSettings, fetchEmissions, fetchSales
 } from '../services/api';
 
@@ -76,7 +76,7 @@ export const ProductProvider = ({ children }) => {
                 }
 
                 // 2. NUEVO: Cargar Emisiones desde mock
-                const { data: emissionsData } = await fetchEmissions();
+                const { data: emissionsData } = await fetchEmissions(organizationId);
 
                 if (emissionsData) {
                     setRawEmissions(emissionsData);

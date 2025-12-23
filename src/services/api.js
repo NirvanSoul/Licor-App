@@ -1,79 +1,38 @@
-/**
- * MOCK API SERVICE
- * Replaces Supabase with localStorage
- */
-
-import { initialProducts, initialEmissions, initialSettings } from './mockData';
-
-const COLLECTION = {
-    PRODUCTS: 'mock_products',
-    INVENTORY: 'mock_inventory',
-    SALES: 'mock_sales',
-    PRICES: 'mock_prices',
-    EMISSIONS: 'mock_emissions',
-    SETTINGS: 'mock_settings',
-    CONVERSIONS: 'mock_conversions'
-};
-
-// Helper: Simulate Async Delay
-const delay = (ms = 300) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Helper: Get from LocalStorage or Init
-const getStore = (key, initial) => {
-    try {
-        const stored = localStorage.getItem(key);
-        if (!stored) {
-            if (initial) {
-                localStorage.setItem(key, JSON.stringify(initial));
-                return initial;
-            }
-            return [];
-        }
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(initial) && !Array.isArray(parsed)) {
-            console.warn(`Store key ${key} expected array but got:`, parsed);
-            return initial;
-        }
-        return parsed;
-    } catch (e) {
-        console.error(`Error loading ${key}`, e);
-        return initial || [];
-    }
-};
-
-const setStore = (key, data) => {
-    localStorage.setItem(key, JSON.stringify(data));
-};
+import { supabase } from '../supabaseClient';
+import { initialEmissions, initialSettings } from './mockData';
 
 /* =========================================================================
    PRODUCTS
    ========================================================================= */
 
 export const fetchProducts = async (organizationId) => {
-    await delay();
-    const products = getStore(COLLECTION.PRODUCTS, initialProducts);
-    return { data: products, error: null };
+    if (!organizationId) return { data: [], error: 'No Organization ID' };
+
+    const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('organization_id', organizationId);
+
+    return { data: data || [], error };
 };
 
 export const createProduct = async (productData) => {
-    await delay();
-    const products = getStore(COLLECTION.PRODUCTS, initialProducts);
-    const newProduct = { ...productData, id: Date.now().toString() };
-    products.push(newProduct);
-    setStore(COLLECTION.PRODUCTS, products);
-    return { data: newProduct, error: null };
+    const { data, error } = await supabase
+        .from('products')
+        .insert([productData])
+        .select();
+
+    return { data: data ? data[0] : null, error };
 };
 
 export const updateProduct = async (id, updates) => {
-    await delay();
-    const products = getStore(COLLECTION.PRODUCTS, initialProducts);
-    const index = products.findIndex(p => p.id === id);
-    if (index === -1) return { data: null, error: { message: 'Not found' } };
+    const { data, error } = await supabase
+        .from('products')
+        .update(updates)
+        .eq('id', id)
+        .select();
 
-    const updatedProduct = { ...products[index], ...updates };
-    products[index] = updatedProduct;
-    setStore(COLLECTION.PRODUCTS, products);
-    return { data: updatedProduct, error: null };
+    return { data: data ? data[0] : null, error };
 };
 
 /* =========================================================================
@@ -81,67 +40,116 @@ export const updateProduct = async (id, updates) => {
    ========================================================================= */
 
 export const fetchInventory = async (organizationId) => {
-    await delay();
-    const inventory = getStore(COLLECTION.INVENTORY, []);
-    const products = getStore(COLLECTION.PRODUCTS, initialProducts);
+    if (!organizationId) return { data: [], error: 'No Organization ID' };
 
-    // Join logic simulation
-    const joined = (Array.isArray(inventory) ? inventory : []).map(item => {
-        const prod = products.find(p => p.id === item.product_id);
-        return {
-            ...item,
-            products: prod ? { name: prod.name, color: prod.color } : { name: 'Unknown', color: '#ccc' }
-        };
-    });
+    // Fetch Inventory and Related Product info
+    const { data, error } = await supabase
+        .from('inventory')
+        .select(`
+            *,
+            products (
+                name,
+                color
+            )
+        `)
+        .eq('organization_id', organizationId);
 
-    return { data: joined, error: null };
+    if (error) return { data: [], error };
+
+    // Flatten structure to match app expectation { ..., products: { name: ... } }
+    // Supabase returns nested object by default which matches what we need mostly,
+    // but let's ensure it's robust.
+    return { data: data || [], error: null };
 };
 
 export const upsertInventory = async (itemData) => {
-    await delay(); // itemData has { product_id, subtype, quantity, organization_id }
-    let inventory = getStore(COLLECTION.INVENTORY, []);
+    // itemData: { product_id, subtype, quantity, organization_id }
+    // We use unique constraint on (product_id, subtype) for upsert
+    const { data, error } = await supabase
+        .from('inventory')
+        .upsert(itemData, { onConflict: 'product_id, subtype' })
+        .select();
 
-    const index = inventory.findIndex(i =>
-        i.product_id === itemData.product_id &&
-        i.subtype === itemData.subtype
-    );
-
-    let resultItem;
-    if (index > -1) {
-        inventory[index] = { ...inventory[index], ...itemData, updated_at: new Date().toISOString() };
-        resultItem = inventory[index];
-    } else {
-        resultItem = { ...itemData, id: Date.now().toString(), updated_at: new Date().toISOString() };
-        inventory.push(resultItem);
-    }
-
-    setStore(COLLECTION.INVENTORY, inventory);
-    return { data: resultItem, error: null };
+    return { data: data ? data[0] : null, error };
 };
 
 /* =========================================================================
-   SALES
+   SALES (ORDERS)
    ========================================================================= */
 
 export const fetchSales = async (organizationId) => {
-    await delay();
-    const sales = getStore(COLLECTION.SALES, []);
-    return { data: sales.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)), error: null };
+    if (!organizationId) return { data: [], error: 'No Organization ID' };
+
+    // Fetch Orders with Items (if needed deeply) or just orders?
+    // App usually wants a summary list.
+    // If 'items' are embedded in the order object in the app logic, we need to fetch them.
+    // However, the Supabase schema separates them.
+    // We will join them.
+
+    const { data, error } = await supabase
+        .from('orders')
+        .select(`
+            *,
+            items:order_items (*)
+        `)
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false });
+
+    return { data: data || [], error };
 };
 
 export const createSales = async (salesData) => {
-    await delay();
-    let sales = getStore(COLLECTION.SALES, []);
-    // Assign IDs and Dates
-    const newSales = salesData.map(s => ({
-        ...s,
-        id: Math.random().toString(36).substr(2, 9),
-        created_at: new Date().toISOString()
-    }));
+    // salesData is array of orders? App logic seems to send one order usually but name implies multiple.
+    // Looking at previous mock, it accepted an array.
+    // We'll iterate or bulk insert if possible. 
+    // Orders table structure needs parent insert then child insert.
 
-    sales = [...sales, ...newSales];
-    setStore(COLLECTION.SALES, sales);
-    return { data: newSales, error: null };
+    // NOTE: This usually comes as a single 'order' object from the app context, 
+    // but the mock accepted [ ...newSales ]. 
+    // Let's assume input is an array of orders.
+
+    const results = [];
+    const errors = [];
+
+    for (const sale of salesData) {
+        // 1. Create Order
+        const { items, ...orderInfo } = sale;
+        const { data: orderData, error: orderError } = await supabase
+            .from('orders')
+            .insert([orderInfo])
+            .select()
+            .single();
+
+        if (orderError) {
+            errors.push(orderError);
+            continue;
+        }
+
+        const orderId = orderData.id;
+
+        // 2. Create Order Items
+        if (items && items.length > 0) {
+            const itemsToInsert = items.map(item => ({
+                order_id: orderId,
+                product_id: item.productID || item.id, // Adaptation
+                product_name: item.name || item.beerType,
+                quantity: item.quantity,
+                price: item.price,
+                emission: item.emission,
+                subtype: item.subtype
+            }));
+
+            const { error: itemsError } = await supabase
+                .from('order_items')
+                .insert(itemsToInsert);
+
+            if (itemsError) console.error("Error saving items for order " + orderId, itemsError);
+        }
+
+        results.push({ ...orderData, items }); // Return structure
+    }
+
+    return { data: results, error: errors.length ? errors : null };
 };
 
 /* =========================================================================
@@ -149,47 +157,55 @@ export const createSales = async (salesData) => {
    ========================================================================= */
 
 export const fetchPrices = async (organizationId) => {
-    await delay();
-    const prices = getStore(COLLECTION.PRICES, []);
-    const products = getStore(COLLECTION.PRODUCTS, initialProducts);
+    if (!organizationId) return { data: [], error: 'No Organization ID' };
 
-    const joined = prices.map(p => {
-        const prod = products.find(prod => prod.id === p.product_id);
-        return {
-            ...p,
-            products: prod ? { name: prod.name } : { name: 'Unknown' }
-        };
-    });
+    const { data, error } = await supabase
+        .from('prices')
+        .select(`
+            *,
+            products (name)
+        `)
+        .eq('organization_id', organizationId);
 
-    return { data: joined, error: null };
+    // Helper to match app structure if needed?
+    // App expects { ..., products: { name: ... } }
+
+    return { data: data || [], error };
 };
 
 export const upsertPrice = async (priceData) => {
-    // This function wasn't explicitly exported in original api.js but logic was inside ProductContext.
-    // We'll export a helper if needed, or context can use local storage directly?
-    // Let's implement it to match api pattern.
-    // NOTE: ProductContext calls `supabase.from('prices').upsert` directly. 
-    // We will need to update ProductContext to call this API function instead or use this logic.
-    // For now, I'll provide the implementation here to be called by context rewrites.
-}
+    const { data, error } = await supabase
+        .from('prices')
+        .upsert(priceData, { onConflict: 'product_id, emission, subtype, is_local' })
+        .select();
+
+    return { data: data ? data[0] : null, error };
+};
 
 /* =========================================================================
    SETTINGS / EMISSIONS
    ========================================================================= */
 
 export const fetchSettings = async (organizationId) => {
-    await delay();
-    return { data: getStore(COLLECTION.SETTINGS, initialSettings), error: null };
+    // Could move to DB later
+    return { data: initialSettings, error: null };
 };
 
-export const fetchEmissions = async () => {
-    await delay();
-    return { data: getStore(COLLECTION.EMISSIONS, initialEmissions), error: null };
+export const fetchEmissions = async (organizationId) => {
+    if (!organizationId) return { data: [], error: 'No Organization ID' };
+
+    const { data, error } = await supabase
+        .from('emission_types')
+        .select('*')
+        .eq('organization_id', organizationId);
+
+    return { data: data || [], error };
 };
 
 export const resetDatabase = async () => {
-    Object.values(COLLECTION).forEach(key => localStorage.removeItem(key));
-    localStorage.removeItem('pendingOrders'); // Also clear pending orders from OrderContext
-    // We could reload page here, but UI should handle it.
+    console.warn("Reset Database called - This is destructive in Supabase!");
+    // Requires admin privileges or implementation choice. 
+    // For now, disabling or just clearing local state.
+    localStorage.removeItem('pendingOrders');
     return { success: true };
 };

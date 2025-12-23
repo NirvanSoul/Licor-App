@@ -12,6 +12,7 @@
     "upload": "powershell -ExecutionPolicy Bypass -File ./upload_app.ps1"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.89.0",
     "lucide-react": "^0.561.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

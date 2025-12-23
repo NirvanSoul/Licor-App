@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 // import { supabase } from '../supabaseClient';
 import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { LogIn, Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
@@ -11,30 +12,22 @@ export default function Login() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
+    const { login } = useAuth();
+
     const handleLogin = async (e) => {
         e.preventDefault();
         setLoading(true);
         setError('');
 
-        // Mock Login for local mode
-        setTimeout(() => {
+        try {
+            await login(email, password);
             navigate('/vender');
-        }, 1000);
-
-        /*
-        const { error } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-        });
-
-        if (error) {
-            setError(error.message);
+        } catch (err) {
+            console.error(err);
+            setError('Credenciales inválidas o error de conexión.');
+        } finally {
             setLoading(false);
-        } else {
-            // Context will pick up the change
-            navigate('/vender'); // Default redirect
         }
-        */
     };
 
     return (
