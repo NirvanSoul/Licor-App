@@ -106,11 +106,11 @@ export default function ContainerSelector({ value, onChange }) {
             />
 
             {/* Level 2: Sub-options (Conditional) */}
-            <div style={{
-                animation: 'slideUpFade 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-                transformOrigin: 'top center'
-            }}>
-                {isCan && (
+            {isCan && (
+                <div style={{
+                    animation: 'slideUpFade 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                    transformOrigin: 'top center'
+                }}>
                     <SlidingSegmentedControl
                         onSelect={(opt) => onChange(`Lata ${opt.value}`)}
                         options={[
@@ -118,8 +118,8 @@ export default function ContainerSelector({ value, onChange }) {
                             { label: 'Grande', value: 'Grande', isActive: isLarge }
                         ]}
                     />
-                )}
-            </div>
+                </div>
+            )}
             <style>{`
                 @keyframes slideUpFade {
                     from { opacity: 0; transform: translateY(-4px) scale(0.98); }

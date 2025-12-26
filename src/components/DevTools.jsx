@@ -6,10 +6,8 @@ const DevTools = () => {
     const [isOpen, setIsOpen] = useState(false);
 
     // Only show in development if you want, or just keep it hidden/floating
-    if (process.env.NODE_ENV === 'production' && !window.location.host.includes('localhost')) {
-        // You can return null here to hide in production
-        // But the user asked for "totalmente removible", so we'll keep it active for now
-        // so they can test it in their current environment.
+    if (import.meta.env.MODE === 'production' && !window.location.host.includes('localhost')) {
+        return null;
     }
 
     return (

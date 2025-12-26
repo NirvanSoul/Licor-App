@@ -19,7 +19,7 @@ const BrokenBottleIcon = ({ size = 20, color = 'currentColor', ...props }) => (
 
 export default function PendingPage() {
     const { pendingOrders, addItemToOrder, closeOrder, createOrder, calculateOrderTotal } = useOrder();
-    const { getBsPrice, beerTypes, exchangeRates, getPrice, currencySymbol, reportWaste } = useProduct();
+    const { getBsPrice, beerTypes, exchangeRates, getPrice, currencySymbol, reportWaste, mainCurrency, currentRate } = useProduct();
     const [selectedOrder, setSelectedOrder] = useState(null); // For "Add Item" modal
     const [closingOrderId, setClosingOrderId] = useState(null); // For "Confirm Close" modal
     const [showOpenTabModal, setShowOpenTabModal] = useState(false);
@@ -480,9 +480,32 @@ export default function PendingPage() {
                                 >
                                     <ChevronDown size={20} color="var(--text-primary)" />
                                 </button>
-                                <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)', minWidth: '40px', textAlign: 'center' }}>
-                                    {wasteSelection.quantity}
-                                </span>
+                                <input
+                                    type="number"
+                                    inputMode="numeric"
+                                    value={wasteSelection.quantity}
+                                    onChange={(e) => {
+                                        const val = parseInt(e.target.value, 10);
+                                        if (!isNaN(val)) {
+                                            setWasteSelection(prev => ({ ...prev, quantity: Math.max(0, val) }));
+                                        } else if (e.target.value === '') {
+                                            setWasteSelection(prev => ({ ...prev, quantity: 0 }));
+                                        }
+                                    }}
+                                    onFocus={(e) => e.target.select()}
+                                    style={{
+                                        fontSize: '1.5rem',
+                                        fontWeight: 700,
+                                        color: 'var(--text-primary)',
+                                        width: '100px',
+                                        textAlign: 'center',
+                                        background: 'transparent',
+                                        border: 'none',
+                                        outline: 'none',
+                                        WebkitAppearance: 'none',
+                                        MozAppearance: 'textfield'
+                                    }}
+                                />
                                 <button
                                     onClick={() => setWasteSelection(prev => ({ ...prev, quantity: prev.quantity + 1 }))}
                                     style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'var(--bg-app)', border: '1px solid var(--accent-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -514,7 +537,7 @@ export default function PendingPage() {
                 const orderToClose = pendingOrders.find(o => o.id === closingOrderId);
                 if (!orderToClose) return null;
                 const totalUsd = getOrderTotal(orderToClose.items, orderToClose.type);
-                const totalBs = totalUsd * (exchangeRates.bcv || 0);
+                const totalBs = totalUsd * (currentRate || 0);
                 const isOpenTab = orderToClose.items.some(i => i.emission === 'Libre' || i.emission === 'Consumo');
 
                 // If it's NOT an open tab, they already paid or pay elsewhere (Pre-Pagado). 
@@ -647,9 +670,11 @@ export default function PendingPage() {
                                     ${totalUsd.toFixed(2)}
                                 </div>
                                 <div style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--accent-color)', marginTop: '0.5rem' }}>
-                                    {totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs
+                                    {totalBs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs
                                 </div>
-                                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>Tasa BCV: {exchangeRates.bcv} Bs/$</p>
+                                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+                                    {mainCurrency === 'USD' ? 'Tasa Dólar BCV' : (mainCurrency === 'EUR' ? 'Tasa Euro BCV' : 'Tasa Personalizada')}: {currentRate} Bs/$
+                                </p>
                             </div>
 
                             <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--text-primary)' }}>Selecciona Método de Pago</h4>

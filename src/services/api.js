@@ -202,6 +202,16 @@ export const fetchEmissions = async (organizationId) => {
     return { data: data || [], error };
 };
 
+export const upsertEmission = async (emissionData) => {
+    // emissionData: { organization_id, name, subtype, units }
+    const { data, error } = await supabase
+        .from('emission_types')
+        .upsert(emissionData, { onConflict: 'organization_id, name, subtype' })
+        .select();
+
+    return { data: data ? data[0] : null, error };
+};
+
 export const resetDatabase = async () => {
     console.warn("Reset Database called - This is destructive in Supabase!");
     // Requires admin privileges or implementation choice. 

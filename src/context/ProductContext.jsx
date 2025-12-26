@@ -2,11 +2,12 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { useNotification } from './NotificationContext';
 // import { useRealtime } from '../hooks/useRealtime'; // REMOVED
+import { supabase } from '../supabaseClient';
 import {
     fetchProducts, createProduct, updateProduct,
     fetchInventory, upsertInventory,
     fetchPrices, upsertPrice,
-    fetchSettings, fetchEmissions, fetchSales
+    fetchSettings, fetchEmissions, fetchSales, upsertEmission
 } from '../services/api';
 
 const ProductContext = createContext();
@@ -44,7 +45,15 @@ export const ProductProvider = ({ children }) => {
 
     // --- MAIN CURRENCY ---
     const [mainCurrency, setMainCurrency] = useState(() => localStorage.getItem('mainCurrency') || 'USD');
-    const currencySymbol = mainCurrency === 'USD' ? '$' : '€';
+
+    const getCurrencySymbol = (mode) => {
+        if (mode === 'USD') return '$';
+        if (mode === 'EUR') return '€';
+        if (mode === 'CUSTOM') return '$'; // Special symbol for custom rate
+        return '$';
+    };
+
+    const currencySymbol = getCurrencySymbol(mainCurrency);
 
     // Persist Main Currency
     useEffect(() => {
@@ -123,15 +132,29 @@ export const ProductProvider = ({ children }) => {
                 }
 
                 // 5. Conversions
-                // Mock conversions from local storage for now if not in API
+                const convMap = {};
+
+                // A. Real data from Supabase (emission_types)
+                if (emissionsData && Array.isArray(emissionsData)) {
+                    emissionsData.forEach(e => {
+                        if (e.name && e.subtype && e.units) {
+                            convMap[`${e.name}_${e.subtype}`] = e.units;
+                        }
+                    });
+                }
+
+                // B. Fallback/Sync with Mock local storage
                 const storedConversions = loadFromStorage('mock_conversions', []);
                 if (Array.isArray(storedConversions)) {
-                    const convMap = {};
                     storedConversions.forEach(c => {
-                        convMap[`${c.emission}_${c.subtype}`] = c.units;
+                        const key = `${c.emission}_${c.subtype}`;
+                        // If not already in map (prefer DB), or if DB was empty
+                        if (!convMap[key]) {
+                            convMap[key] = c.units;
+                        }
                     });
-                    setConversions(convMap);
                 }
+                setConversions(convMap);
 
             } catch (error) {
                 console.error("Error fetching initial data:", error);
@@ -154,8 +177,77 @@ export const ProductProvider = ({ children }) => {
         };
     }, []);
 
-    // --- REALTIME ALIGNMENT ---
-    // Removed because Mock Data is local only. Refreshes will reload data.
+    // --- REALTIME SYNC (Active for Phone/PC Sync) ---
+    useEffect(() => {
+        if (!organizationId) return;
+
+        // 1. Subscribe to Channels
+        const channel = supabase
+            .channel(`db-changes-${organizationId}`)
+            // PRODUCTS
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'products', filter: `organization_id=eq.${organizationId}` }, (payload) => {
+                if (payload.eventType === 'INSERT') {
+                    setBeerTypes(prev => Array.from(new Set([...prev, payload.new.name])));
+                    setProductMap(prev => ({ ...prev, [payload.new.name]: payload.new.id }));
+                    if (payload.new.color) setBeerColors(prev => ({ ...prev, [payload.new.name]: payload.new.color }));
+                } else if (payload.eventType === 'UPDATE') {
+                    if (payload.new.color) setBeerColors(prev => ({ ...prev, [payload.new.name]: payload.new.color }));
+                } else if (payload.eventType === 'DELETE') {
+                    // Handle delete if needed
+                }
+            })
+            // INVENTORY
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory', filter: `organization_id=eq.${organizationId}` }, (payload) => {
+                // We need to resolve product_id to name. Since we have productMap, we can attempt it,
+                // but if productMap isn't updated, we might need a reverse map.
+                // Let's use the current state to update.
+                const findProductName = (id) => Object.keys(productMap).find(name => productMap[name] === id);
+
+                if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                    const name = findProductName(payload.new.product_id);
+                    if (name) {
+                        setInventory(prev => ({ ...prev, [`${name}_${payload.new.subtype}`]: payload.new.quantity }));
+                    }
+                }
+            })
+            // PRICES
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'prices', filter: `organization_id=eq.${organizationId}` }, (payload) => {
+                const findProductName = (id) => Object.keys(productMap).find(name => productMap[name] === id);
+                if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                    const name = findProductName(payload.new.product_id);
+                    if (name) {
+                        const suffix = payload.new.is_local ? '_local' : '';
+                        const key = `${name}_${payload.new.emission}_${payload.new.subtype}${suffix}`;
+                        setPrices(prev => ({ ...prev, [key]: Number(payload.new.price) }));
+                    }
+                }
+            })
+            // EMISSIONS (CONVERSIONS)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'emission_types', filter: `organization_id=eq.${organizationId}` }, (payload) => {
+                if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                    const key = `${payload.new.name}_${payload.new.subtype}`;
+                    setConversions(prev => ({ ...prev, [key]: payload.new.units }));
+                    // Also update rawEmissions for the selector
+                    setRawEmissions(prev => {
+                        const idx = prev.findIndex(e => e.id === payload.new.id);
+                        if (idx >= 0) {
+                            const copy = [...prev];
+                            copy[idx] = payload.new;
+                            return copy;
+                        }
+                        return [...prev, payload.new];
+                    });
+                } else if (payload.eventType === 'DELETE') {
+                    // Update rawEmissions
+                    setRawEmissions(prev => prev.filter(e => e.id !== payload.old.id));
+                }
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [organizationId, productMap]);
 
     // --- PRODUCT MANAGEMENT ---
     const addBeerType = async (name, color) => {
@@ -176,9 +268,9 @@ export const ProductProvider = ({ children }) => {
     const updateBeerColor = async (name, color) => {
         setBeerColors(prev => ({ ...prev, [name]: color }));
         const productId = productMap[name];
-        // if (productId) {
-        //     await updateProduct(productId, { color });
-        // }
+        if (productId) {
+            await updateProduct(productId, { color });
+        }
     };
 
     const removeBeerType = async (name) => {
@@ -213,7 +305,16 @@ export const ProductProvider = ({ children }) => {
         const exists = rawEmissions.some(e => e.name === name && e.subtype === subtype);
         if (!exists) {
             try {
-                // Mock insert
+                // Real insert if connected
+                if (organizationId) {
+                    await upsertEmission({
+                        organization_id: organizationId,
+                        name,
+                        units: parseInt(units),
+                        subtype
+                    });
+                }
+
                 const newEmission = { id: Date.now(), name, units: parseInt(units), subtype };
                 const updated = [...rawEmissions, newEmission];
                 setRawEmissions(updated);
@@ -256,7 +357,7 @@ export const ProductProvider = ({ children }) => {
     };
 
     // NEW: Helper to get emissions relevant for a subtype (plus globals)
-    const getEmissionsForSubtype = (subtype) => {
+    const getEmissionsForSubtype = React.useCallback((subtype) => {
         const globals = ['Unidad', 'Media Caja', 'Caja'];
         const isLata = subtype && subtype.toLowerCase().includes('lata');
 
@@ -265,7 +366,7 @@ export const ProductProvider = ({ children }) => {
             globals.push('Six Pack');
         }
 
-        const custom = rawEmissions
+        const custom = (rawEmissions || [])
             .filter(e => {
                 const belongsToSubtype = e.subtype === subtype || !e.subtype;
                 const isSixPack = e.name && e.name.toLowerCase().trim() === 'six pack';
@@ -281,7 +382,7 @@ export const ProductProvider = ({ children }) => {
         }
 
         return merged;
-    };
+    }, [rawEmissions]);
 
     // --- COST & NET PROFIT MANAGEMENT ---
     const [costPrices, setCostPrices] = useState({});
@@ -408,9 +509,21 @@ export const ProductProvider = ({ children }) => {
 
         const productId = productMap[beer];
         if (productId) {
-            // Mock Upsert Price
-            const prices = loadFromStorage('mock_prices', []);
-            const existingIndex = prices.findIndex(p =>
+            // Real Upsert to Database
+            if (organizationId) {
+                await upsertPrice({
+                    organization_id: organizationId,
+                    product_id: productId,
+                    emission,
+                    subtype,
+                    price: newPrice,
+                    is_local: isLocal
+                });
+            }
+
+            // Mock/Local Fallback
+            const localPrices = loadFromStorage('mock_prices', []);
+            const existingIndex = localPrices.findIndex(p =>
                 p.product_id === productId &&
                 p.emission === emission &&
                 p.subtype === subtype &&
@@ -427,15 +540,15 @@ export const ProductProvider = ({ children }) => {
             };
 
             if (existingIndex >= 0) {
-                prices[existingIndex] = { ...prices[existingIndex], ...priceData };
+                localPrices[existingIndex] = { ...localPrices[existingIndex], ...priceData };
             } else {
-                prices.push({ ...priceData, id: Date.now().toString() });
+                localPrices.push({ ...priceData, id: Date.now().toString() });
             }
-            localStorage.setItem('mock_prices', JSON.stringify(prices));
+            localStorage.setItem('mock_prices', JSON.stringify(localPrices));
         }
     };
 
-    const getPrice = (beer, emission, subtype, mode = 'standard') => {
+    const getPrice = React.useCallback((beer, emission, subtype, mode = 'standard') => {
         const suffix = mode === 'local' ? '_local' : '';
         const key = `${beer}_${emission}_${subtype}${suffix}`;
 
@@ -448,26 +561,36 @@ export const ProductProvider = ({ children }) => {
         }
 
         return price || 0;
-    };
+    }, [prices]);
 
     const updateConversion = async (emission, units, subtype) => {
         const key = `${emission}_${subtype}`;
         const newUnits = parseInt(units, 10);
         setConversions(prev => ({ ...prev, [key]: newUnits }));
 
-        // Mock Upsert Conversion
-        const conversions = loadFromStorage('mock_conversions', []);
-        const existingIndex = conversions.findIndex(c =>
+        // Real Upsert
+        if (organizationId) {
+            await upsertEmission({
+                organization_id: organizationId,
+                name: emission,
+                subtype,
+                units: newUnits
+            });
+        }
+
+        // Mock cleanup/fallback
+        const conversionsStored = loadFromStorage('mock_conversions', []);
+        const existingIndexForConv = conversionsStored.findIndex(c =>
             c.emission === emission && c.subtype === subtype
         );
-        const data = { organization_id: organizationId, emission, subtype, units: newUnits };
+        const convData = { organization_id: organizationId, emission, subtype, units: newUnits };
 
-        if (existingIndex >= 0) {
-            conversions[existingIndex] = { ...conversions[existingIndex], ...data };
+        if (existingIndexForConv >= 0) {
+            conversionsStored[existingIndexForConv] = { ...conversionsStored[existingIndexForConv], ...convData };
         } else {
-            conversions.push({ ...data, id: Date.now().toString() });
+            conversionsStored.push({ ...convData, id: Date.now().toString() });
         }
-        localStorage.setItem('mock_conversions', JSON.stringify(conversions));
+        localStorage.setItem('mock_conversions', JSON.stringify(conversionsStored));
     };
 
     const getUnitsPerEmission = (emission, subtype) => {
@@ -493,12 +616,12 @@ export const ProductProvider = ({ children }) => {
 
         if (emission === 'Caja') {
             if (subtype && subtype.toLowerCase().includes('lata')) return 24;
-            // Default to 36 (Tercio standard) for "Botella" as requested by user context
+            if (subtype === 'Botella Tercio') return 24; // User requested 24 for Tercio
             return 36;
         }
         if (emission === 'Media Caja') {
             if (subtype && subtype.toLowerCase().includes('lata')) return 12;
-            // Default to 18 (Half Tercio) for "Botella"
+            if (subtype === 'Botella Tercio') return 12; // User requested 12 for Tercio
             return 18;
         }
         return 1;
@@ -506,15 +629,29 @@ export const ProductProvider = ({ children }) => {
 
     // --- EXCHANGE RATES ---
     const [exchangeRates, setExchangeRates] = useState(() =>
-        loadFromStorage('exchangeRates', { bcv: 0, parallel: 0, euro: 0, history: [], lastUpdate: null })
+        loadFromStorage('exchangeRates', { bcv: 0, custom: 0, euro: 0, history: [], lastUpdate: null })
     );
+
+    const updateCustomRate = (value) => {
+        const rawValue = value.toString().replace(/,/g, '');
+        if (rawValue === '') {
+            setExchangeRates(prev => ({ ...prev, custom: 0 }));
+            return;
+        }
+        const newVal = parseFloat(rawValue);
+        if (isNaN(newVal)) return;
+        setExchangeRates(prev => {
+            const updated = { ...prev, custom: newVal };
+            localStorage.setItem('exchangeRates', JSON.stringify(updated));
+            return updated;
+        });
+    };
 
     const fetchRates = async () => {
         try {
             // We keep using dolarapi for USD as per existing logic, and add dolarvzla for Euro & History
-            const [bcvRes, parallelRes, euroRes, historyRes] = await Promise.allSettled([
+            const [bcvRes, euroRes, historyRes] = await Promise.allSettled([
                 fetch('https://ve.dolarapi.com/v1/dolares/oficial'),
-                fetch('https://ve.dolarapi.com/v1/dolares/paralelo'),
                 fetch('https://api.dolarvzla.com/public/exchange-rate'),
                 fetch('https://api.dolarvzla.com/public/exchange-rate/list')
             ]);
@@ -525,13 +662,6 @@ export const ProductProvider = ({ children }) => {
             let history = [];
             let nextRates = null; // { date, usd, eur }
 
-            // 1. Parallel (Keep DolarApi)
-            if (parallelRes.status === 'fulfilled') {
-                const data = await parallelRes.value.json();
-                if (data && data.promedio) parallel = data.promedio;
-            } else {
-                console.error("Error fetching Parallel:", parallelRes.reason);
-            }
 
             // 2. Official (BCV & Euro) from DolarVzla (Logic for Weekend/Future Rates)
             if (euroRes.status === 'fulfilled') {
@@ -594,13 +724,17 @@ export const ProductProvider = ({ children }) => {
                 }
             }
 
-            setExchangeRates({
-                bcv,
-                parallel,
-                euro,
-                history,
-                nextRates,
-                lastUpdate: new Date().toLocaleString()
+            setExchangeRates(prev => {
+                const updated = {
+                    ...prev,
+                    bcv,
+                    euro,
+                    history,
+                    nextRates,
+                    lastUpdate: new Date().toLocaleString()
+                };
+                localStorage.setItem('exchangeRates', JSON.stringify(updated));
+                return updated;
             });
 
         } catch (error) {
@@ -608,10 +742,11 @@ export const ProductProvider = ({ children }) => {
         }
     };
 
+    const currentRate = mainCurrency === 'USD' ? (exchangeRates.bcv || 0) : (mainCurrency === 'EUR' ? (exchangeRates.euro || 0) : (exchangeRates.custom || 0));
+
     const getBsPrice = (beer, emission, subtype, mode = 'standard') => {
         const basePrice = getPrice(beer, emission, subtype, mode);
-        const rate = mainCurrency === 'USD' ? (exchangeRates.bcv || 0) : (exchangeRates.euro || 0);
-        return basePrice * rate;
+        return basePrice * currentRate;
     };
 
     // --- INVENTORY MANAGEMENT (CORREGIDO) ---
@@ -626,10 +761,9 @@ export const ProductProvider = ({ children }) => {
         // 1. Actualizar UI
         setInventory(prev => ({ ...prev, [key]: newTotal }));
 
-        // 2. Actualizar Mock BD / TODO: Sync with DB
-        /*
+        // 2. Sync with DB
         const productId = productMap[beer];
-        if (productId) {
+        if (productId && organizationId) {
             await upsertInventory({
                 organization_id: organizationId,
                 product_id: productId,
@@ -637,7 +771,6 @@ export const ProductProvider = ({ children }) => {
                 quantity: newTotal
             });
         }
-        */
     };
 
     const deductStock = async (beer, emission, subtype, quantity) => {
@@ -649,10 +782,9 @@ export const ProductProvider = ({ children }) => {
 
         setInventory(prev => ({ ...prev, [key]: newTotal }));
 
-        // TODO: Sync with DB
-        /*
+        // 2. Sync with DB
         const productId = productMap[beer];
-        if (productId) {
+        if (productId && organizationId) {
             await upsertInventory({
                 organization_id: organizationId,
                 product_id: productId,
@@ -660,7 +792,6 @@ export const ProductProvider = ({ children }) => {
                 quantity: newTotal
             });
         }
-        */
     };
 
     const setBaseStock = async (beer, subtype, units) => {
@@ -668,10 +799,9 @@ export const ProductProvider = ({ children }) => {
 
         setInventory(prev => ({ ...prev, [key]: units }));
 
-        // TODO: Sync with DB
-        /*
+        // 2. Sync with DB
         const productId = productMap[beer];
-        if (productId) {
+        if (productId && organizationId) {
             await upsertInventory({
                 organization_id: organizationId,
                 product_id: productId,
@@ -679,7 +809,6 @@ export const ProductProvider = ({ children }) => {
                 quantity: units
             });
         }
-        */
     };
 
     const checkStock = (beer, emission, subtype, quantity) => {
@@ -717,6 +846,18 @@ export const ProductProvider = ({ children }) => {
             const current = prev[key] || 0;
             const newVal = current + delta;
             if (newVal === 0) {
+                const { [key]: _, ...rest } = prev;
+                return rest;
+            }
+            return { ...prev, [key]: newVal };
+        });
+    };
+
+    const setPendingInventoryValue = (beer, subtype, emission, value) => {
+        const key = `${beer}_${subtype}_${emission}`;
+        setPendingInventory(prev => {
+            const newVal = parseInt(value, 10);
+            if (isNaN(newVal) || newVal === 0) {
                 const { [key]: _, ...rest } = prev;
                 return rest;
             }
@@ -911,12 +1052,15 @@ export const ProductProvider = ({ children }) => {
             getBsPrice,
             exchangeRates,
             fetchRates,
+            currentRate,
+            updateCustomRate,
             getUnitsPerEmission,
             pendingInventory,
             updatePendingInventory,
             clearPendingInventory,
             commitInventory,
             getPendingInventory,
+            setPendingInventoryValue,
             inventoryHistory,
             getBeerColor,
             updateBeerColor,
@@ -931,9 +1075,6 @@ export const ProductProvider = ({ children }) => {
             reportWaste, // Exposed
             getPendingWaste,
             breakageHistory,
-            emissionOptions,
-            subtypes,
-            conversions,
             // Cost & Profit
             costPrices,
             updateCostPrice,

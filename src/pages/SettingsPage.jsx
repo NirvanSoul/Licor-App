@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNotification } from '../context/NotificationContext';
 import { supabase } from '../supabaseClient';
-import { Trash2, Plus, Save, ChevronRight, ChevronLeft, CircleDollarSign, Users, Package, Star, Box, Send, LogOut, Moon, Sun, Store, ShoppingBag, Search, ChevronDown, ChevronUp, X, Pencil } from 'lucide-react';
+import { Trash2, Plus, Save, ChevronRight, ChevronLeft, CircleDollarSign, Users, Package, Star, Box, Send, LogOut, Moon, Sun, Store, ShoppingBag, Search, ChevronDown, ChevronUp, X, Pencil, Check } from 'lucide-react';
 import AccordionSection from '../components/AccordionSection';
 import StockManager from '../components/StockManager';
 import ContainerSelector from '../components/ContainerSelector';
@@ -148,7 +148,7 @@ const BeerDashboardCard = ({ beerName, searchFilter = '' }) => {
 
     const formatBs = (usd) => {
         const rate = exchangeRates.bcv || 0;
-        return (usd * rate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Bs';
+        return (usd * rate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Bs';
     };
 
     if (!isVisible) return null;
@@ -272,9 +272,13 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
     const {
         getEmissionsForSubtype,
         getPrice,
-        updatePrice, currencySymbol
+        updatePrice, currencySymbol, currentRate
     } = useProduct();
     const { showNotification } = useNotification();
+    const { theme } = useTheme();
+
+    // Currency Mode State: 'USD' | 'BS'
+    const [currencyMode, setCurrencyMode] = useState('USD');
 
     // Local Popup State
     const [successPopup, setSuccessPopup] = useState(null); // { message: string }
@@ -321,18 +325,26 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
     const [priceMap, setPriceMap] = useState({});
 
     // Load initial prices when beer/subtype changes
+    // Load initial prices when beer/subtype changes OR Currency Mode changes
     useEffect(() => {
         const initialMap = {};
+        const rate = currentRate || 1; // Avoid div by zero
+
         emissions.forEach(emi => {
-            const std = getPrice(beerName, emi, subtype);
-            const loc = getPrice(beerName, emi, subtype, 'local');
+            const stdUSD = getPrice(beerName, emi, subtype);
+            const locUSD = getPrice(beerName, emi, subtype, 'local');
+
+            // Calculate based on mode
+            const stdVal = currencyMode === 'USD' ? stdUSD : (stdUSD * rate);
+            const locVal = currencyMode === 'USD' ? locUSD : (locUSD * rate);
+
             initialMap[emi] = {
-                standard: std > 0 ? std : '',
-                local: loc > 0 ? loc : ''
+                standard: stdVal > 0 ? (currencyMode === 'USD' ? stdVal : stdVal.toFixed(2)) : '',
+                local: locVal > 0 ? (currencyMode === 'USD' ? locVal : locVal.toFixed(2)) : ''
             };
         });
         setPriceMap(initialMap);
-    }, [beerName, subtype, emissions, getPrice]);
+    }, [beerName, subtype, emissions, getPrice, currencyMode, currentRate]);
 
     const handleInputChange = (emission, type, value) => {
         setPriceMap(prev => ({
@@ -346,23 +358,33 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
 
     const handleSaveAll = () => {
         const changes = [];
+        const rate = currentRate || 1;
+
         Object.entries(priceMap).forEach(([emission, values]) => {
+            // Helper to get raw USD value from input
+            const getUsdValue = (inputStr) => {
+                const val = parseFloat(inputStr);
+                if (isNaN(val)) return 0;
+                return currencyMode === 'USD' ? val : (val / rate);
+            };
+
             // Update Standard
             if (values.standard !== '') {
                 const oldPrice = getPrice(beerName, emission, subtype, 'standard');
-                const newPrice = parseFloat(values.standard);
-                if (oldPrice !== newPrice) {
+                const newPrice = getUsdValue(values.standard);
+                // Check diff with epsilon for float precision
+                if (Math.abs(oldPrice - newPrice) > 0.001) {
                     changes.push({ emission, type: 'Llevar', old: oldPrice, new: newPrice });
-                    updatePrice(beerName, emission, subtype, values.standard, false);
+                    updatePrice(beerName, emission, subtype, newPrice, false);
                 }
             }
             // Update Local
             if (values.local !== '') {
                 const oldPrice = getPrice(beerName, emission, subtype, 'local');
-                const newPrice = parseFloat(values.local);
-                if (oldPrice !== newPrice) {
+                const newPrice = getUsdValue(values.local);
+                if (Math.abs(oldPrice - newPrice) > 0.001) {
                     changes.push({ emission, type: 'Local', old: oldPrice, new: newPrice });
-                    updatePrice(beerName, emission, subtype, values.local, true);
+                    updatePrice(beerName, emission, subtype, newPrice, true);
                 }
             }
         });
@@ -386,12 +408,9 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
             {/* Header / Toggle Row */}
             <div
                 onClick={() => setIsExpanded(!isExpanded)}
+                className="price-editor-header"
                 style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: isExpanded ? '1.5rem' : '0',
-                    cursor: 'pointer'
+                    marginBottom: isExpanded ? '1.5rem' : '0'
                 }}
             >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -399,8 +418,72 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
                     <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>{beerName}</h3>
                 </div>
 
-                <div style={{ width: '200px' }} onClick={(e) => e.stopPropagation()}>
-                    <ContainerSelector value={subtype} onChange={setSubtype} />
+                <div className="price-editor-controls" onClick={(e) => e.stopPropagation()}>
+                    {/* Currency Mode Toggle (Premium Pill Design) */}
+                    <div className="currency-toggle-container" style={{
+                        position: 'relative',
+                        display: 'flex',
+                        background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#e5e7eb',
+                        borderRadius: '999px',
+                        padding: '2px',
+                        width: '100px',
+                        height: '32px',
+                        isolation: 'isolate'
+                    }}>
+                        {/* The Sliding Pill */}
+                        <div style={{
+                            position: 'absolute',
+                            top: '2px',
+                            bottom: '2px',
+                            left: '2px',
+                            width: 'calc(50% - 2px)',
+                            background: '#10b981',
+                            borderRadius: '999px',
+                            transform: currencyMode === 'BS' ? 'translateX(100%)' : 'translateX(0)',
+                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                            zIndex: 1
+                        }} />
+
+                        {/* USD Option */}
+                        <button
+                            onClick={() => setCurrencyMode('USD')}
+                            style={{
+                                flex: 1,
+                                border: 'none',
+                                background: 'transparent',
+                                color: currencyMode === 'USD' ? 'white' : '#6b7280',
+                                fontWeight: 800,
+                                fontSize: '0.75rem',
+                                zIndex: 2,
+                                cursor: 'pointer',
+                                transition: 'color 0.3s'
+                            }}
+                        >
+                            USD
+                        </button>
+
+                        {/* BS Option */}
+                        <button
+                            onClick={() => setCurrencyMode('BS')}
+                            style={{
+                                flex: 1,
+                                border: 'none',
+                                background: 'transparent',
+                                color: currencyMode === 'BS' ? 'white' : '#6b7280',
+                                fontWeight: 800,
+                                fontSize: '0.75rem',
+                                zIndex: 2,
+                                cursor: 'pointer',
+                                transition: 'color 0.3s'
+                            }}
+                        >
+                            BS
+                        </button>
+                    </div>
+
+                    <div className="subtype-selector-container" style={{ width: '180px', display: 'flex', alignItems: 'center' }}>
+                        <ContainerSelector value={subtype} onChange={setSubtype} />
+                    </div>
                 </div>
             </div>
 
@@ -433,7 +516,7 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
                                 <div style={{ background: 'var(--bg-card-hover)', padding: '0.75rem', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                                         <ShoppingBag size={14} color="var(--text-secondary)" />
-                                        <span style={{ fontSize: '0.75rem', fontWeight: 600, opacity: 0.7 }}>PARA LLEVAR ({currencySymbol})</span>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 600, opacity: 0.7 }}>PARA LLEVAR ({currencyMode === 'USD' ? currencySymbol : 'Bs.'})</span>
                                     </div>
                                     <input
                                         type="number"
@@ -446,13 +529,18 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
                                             borderRadius: '8px', padding: '8px', width: '100%', fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--text-primary)'
                                         }}
                                     />
+                                    <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textAlign: 'right', marginTop: '2px', opacity: 0.8 }}>
+                                        {currencyMode === 'BS'
+                                            ? `≈ ${currencySymbol}${(parseFloat(priceMap[emission]?.standard || 0) / (currentRate || 1)).toFixed(2)}`
+                                            : `≈ Bs. ${(parseFloat(priceMap[emission]?.standard || 0) * (currentRate || 1)).toLocaleString('es-VE', { maximumFractionDigits: 2 })}`}
+                                    </span>
                                 </div>
 
                                 {/* Local */}
                                 <div style={{ background: 'var(--bg-card-hover)', padding: '0.75rem', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                                         <Store size={14} color="var(--text-secondary)" />
-                                        <span style={{ fontSize: '0.75rem', fontWeight: 600, opacity: 0.7 }}>LOCAL ({currencySymbol})</span>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 600, opacity: 0.7 }}>LOCAL ({currencyMode === 'USD' ? currencySymbol : 'Bs.'})</span>
                                     </div>
                                     <input
                                         type="number"
@@ -465,6 +553,11 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
                                             borderRadius: '8px', padding: '8px', width: '100%', fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--text-primary)'
                                         }}
                                     />
+                                    <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textAlign: 'right', marginTop: '2px', opacity: 0.8 }}>
+                                        {currencyMode === 'BS'
+                                            ? `≈ ${currencySymbol}${(parseFloat(priceMap[emission]?.local || 0) / (currentRate || 1)).toFixed(2)}`
+                                            : `≈ Bs. ${(parseFloat(priceMap[emission]?.local || 0) * (currentRate || 1)).toLocaleString('es-VE', { maximumFractionDigits: 2 })}`}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -501,6 +594,44 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
             <style jsx>{`
                 .order-summary-card > div > div:last-child { border-bottom: none !important; padding-bottom: 0 !important; }
                 @keyframes fadeInPopup { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+                
+                .price-editor-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 12px;
+                    cursor: pointer;
+                }
+
+                .price-editor-controls {
+                    display: flex;
+                    gap: 12px;
+                    align-items: center;
+                }
+
+                @media (max-width: 600px) {
+                    .price-editor-header {
+                        flex-direction: column;
+                        align-items: flex-start;
+                        gap: 16px;
+                    }
+
+                    .price-editor-controls {
+                        width: 100%;
+                        justify-content: space-between;
+                        gap: 8px;
+                    }
+                    
+                    .currency-toggle-container {
+                        flex-shrink: 0;
+                    }
+
+                    .subtype-selector-container {
+                        width: auto !important;
+                        flex: 1;
+                        max-width: 180px;
+                    }
+                }
             `}</style>
 
             {/* LOCAL POPUP FOR PRICE UPDATES */}
@@ -609,7 +740,7 @@ export default function SettingsPage() {
         emissionOptions, addEmissionType, removeEmissionType, getEmissionsForSubtype,
         prices, updatePrice, getPrice,
         inventory,
-        exchangeRates = {}, fetchRates,
+        exchangeRates = {}, fetchRates, updateCustomRate,
         conversions, updateConversion, subtypes, getUnitsPerEmission,
         checkAggregateStock, getBeerColor, updateBeerColor,
         mainCurrency, setMainCurrency
@@ -628,6 +759,8 @@ export default function SettingsPage() {
     // Local State
     const [inviteEmail, setInviteEmail] = useState('');
     const [inviteRole, setInviteRole] = useState('EMPLOYEE');
+    const [isEditingCustomRate, setIsEditingCustomRate] = useState(false);
+    const [draftCustomRate, setDraftCustomRate] = useState('');
     const [inviteStatus, setInviteStatus] = useState('');
     const [historyModalOpen, setHistoryModalOpen] = useState(false); // NEW History Modal state
     const [currentView, setCurrentView] = useState('main');
@@ -725,6 +858,7 @@ export default function SettingsPage() {
     const normalizeSubtype = (subtype) => {
         if (!subtype) return 'Botella';
         const s = subtype.toLowerCase();
+        if (s.includes('tercio')) return 'Botella Tercio';
         if (s.includes('lata')) return 'Lata';
         if (s.includes('botella')) return 'Botella';
         return subtype;
@@ -880,7 +1014,7 @@ export default function SettingsPage() {
                         <div style={{ background: 'var(--bg-card-hover)', padding: '1rem', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                             <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '0.25rem' }}>Tasa BCV (USD)</span>
                             <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: '#34c759' }}>
-                                {exchangeRates.bcv ? `${exchangeRates.bcv} Bs` : '--.-- Bs'}
+                                {exchangeRates.bcv ? `${Number(exchangeRates.bcv).toLocaleString('en-US')} Bs` : '--.-- Bs'}
                             </div>
                             {exchangeRates.nextRates && (
                                 <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
@@ -892,7 +1026,7 @@ export default function SettingsPage() {
                         <div style={{ background: 'var(--bg-card-hover)', padding: '1rem', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                             <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '0.25rem' }}>Tasa BCV (Euro)</span>
                             <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: '#3b82f6' }}>
-                                {exchangeRates.euro ? `${Number(exchangeRates.euro).toFixed(2)} Bs` : '--.-- Bs'}
+                                {exchangeRates.euro ? `${Number(exchangeRates.euro).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs` : '--.-- Bs'}
                             </div>
                             {exchangeRates.nextRates && (
                                 <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
@@ -900,10 +1034,80 @@ export default function SettingsPage() {
                                 </span>
                             )}
                         </div>
-                        <div style={{ background: 'var(--bg-card-hover)', padding: '1rem', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '0.25rem' }}>Tasa Paralelo (USDT)</span>
-                            <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: '#ff9500' }}>
-                                {exchangeRates.parallel ? `${exchangeRates.parallel} Bs` : '--.-- Bs'}
+                        <div style={{ background: 'var(--bg-card-hover)', padding: '1.25rem', borderRadius: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', border: '1px solid #ff950040', position: 'relative', minWidth: '220px' }}>
+                            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '0.5rem' }}>Tasa Personalizada</span>
+
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', gap: '10px' }}>
+                                <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: '#ff9500', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    {isEditingCustomRate ? (
+                                        <input
+                                            type="text"
+                                            inputMode="decimal"
+                                            autoFocus
+                                            value={draftCustomRate}
+                                            onChange={(e) => {
+                                                const rawValue = e.target.value.replace(/,/g, '');
+                                                if (/^\d*\.?\d*$/.test(rawValue)) {
+                                                    setDraftCustomRate(rawValue);
+                                                }
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    updateCustomRate(draftCustomRate);
+                                                    setIsEditingCustomRate(false);
+                                                }
+                                                if (e.key === 'Escape') {
+                                                    setIsEditingCustomRate(false);
+                                                }
+                                            }}
+                                            style={{
+                                                background: 'rgba(255, 149, 0, 0.1)',
+                                                border: '1px solid #ff950060',
+                                                borderRadius: '8px',
+                                                outline: 'none',
+                                                color: '#ff9500',
+                                                fontWeight: 'bold',
+                                                fontSize: '1.75rem',
+                                                textAlign: 'center',
+                                                width: '140px',
+                                                padding: '2px 8px'
+                                            }}
+                                        />
+                                    ) : (
+                                        <span style={{ fontSize: '1.75rem', fontWeight: 800 }}>
+                                            {exchangeRates.custom === 0 ? '0.00' : Number(exchangeRates.custom).toLocaleString('en-US')}
+                                        </span>
+                                    )}
+                                    <span>Bs</span>
+                                </div>
+
+                                <button
+                                    onClick={() => {
+                                        if (isEditingCustomRate) {
+                                            updateCustomRate(draftCustomRate);
+                                            setIsEditingCustomRate(false);
+                                        } else {
+                                            setDraftCustomRate(exchangeRates.custom === 0 ? '' : exchangeRates.custom.toString());
+                                            setIsEditingCustomRate(true);
+                                        }
+                                    }}
+                                    style={{
+                                        background: isEditingCustomRate ? '#34c759' : 'rgba(128, 128, 128, 0.1)',
+                                        border: 'none',
+                                        borderRadius: '50%',
+                                        width: '36px',
+                                        height: '36px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: isEditingCustomRate ? 'white' : 'var(--text-secondary)',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                        flexShrink: 0
+                                    }}
+                                >
+                                    {isEditingCustomRate ? <Save size={18} /> : <Pencil size={16} />}
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -925,17 +1129,18 @@ export default function SettingsPage() {
                             border: '1px solid var(--accent-light)'
                         }}>
                             <span style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Moneda Principal de Negocio</span>
-                            <div style={{ display: 'flex', gap: '1rem' }}>
+                            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
                                 <button
                                     onClick={() => setMainCurrency('USD')}
                                     style={{
-                                        padding: '8px 16px',
+                                        padding: '8px 12px',
                                         borderRadius: '12px',
                                         background: mainCurrency === 'USD' ? '#34c759' : 'transparent',
                                         color: mainCurrency === 'USD' ? 'white' : 'var(--text-secondary)',
                                         border: mainCurrency === 'USD' ? 'none' : '1px solid var(--accent-light)',
                                         cursor: 'pointer',
                                         fontWeight: 700,
+                                        fontSize: '0.8rem',
                                         transition: 'all 0.2s'
                                     }}
                                 >
@@ -944,17 +1149,34 @@ export default function SettingsPage() {
                                 <button
                                     onClick={() => setMainCurrency('EUR')}
                                     style={{
-                                        padding: '8px 16px',
+                                        padding: '8px 12px',
                                         borderRadius: '12px',
                                         background: mainCurrency === 'EUR' ? '#3b82f6' : 'transparent',
                                         color: mainCurrency === 'EUR' ? 'white' : 'var(--text-secondary)',
                                         border: mainCurrency === 'EUR' ? 'none' : '1px solid var(--accent-light)',
                                         cursor: 'pointer',
                                         fontWeight: 700,
+                                        fontSize: '0.8rem',
                                         transition: 'all 0.2s'
                                     }}
                                 >
                                     Euro BCV (€)
+                                </button>
+                                <button
+                                    onClick={() => setMainCurrency('CUSTOM')}
+                                    style={{
+                                        padding: '8px 12px',
+                                        borderRadius: '12px',
+                                        background: mainCurrency === 'CUSTOM' ? '#ff9500' : 'transparent',
+                                        color: mainCurrency === 'CUSTOM' ? 'white' : 'var(--text-secondary)',
+                                        border: mainCurrency === 'CUSTOM' ? 'none' : '1px solid var(--accent-light)',
+                                        cursor: 'pointer',
+                                        fontWeight: 700,
+                                        fontSize: '0.8rem',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    Tasa Personalizada ($)
                                 </button>
                             </div>
                         </div>
@@ -1202,9 +1424,52 @@ export default function SettingsPage() {
                             isOpen={!!openSections['emissions']}
                             onToggle={() => toggleSettingSection('emissions')}
                         >
-                            <div style={{ marginBottom: '1rem' }}>
-                                <label className="text-secondary text-sm">Configurar para:</label>
-                                <ContainerSelector value={selectedConversionSubtype} onChange={setSelectedConversionSubtype} />
+                            <div style={{ marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {/* Tercio Toggle */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: 'var(--bg-card-hover)', borderRadius: '12px', border: '1px solid var(--accent-light)' }}>
+                                    <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)' }}>Formato Tercio</span>
+                                    <button
+                                        onClick={() => {
+                                            const isTercio = selectedConversionSubtype === 'Botella Tercio';
+                                            setSelectedConversionSubtype(isTercio ? 'Botella' : 'Botella Tercio');
+                                        }}
+                                        style={{
+                                            width: '42px',
+                                            height: '24px',
+                                            borderRadius: '12px',
+                                            background: selectedConversionSubtype === 'Botella Tercio' ? 'var(--accent-color)' : 'rgba(128, 128, 128, 0.2)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            padding: '2px',
+                                            cursor: 'pointer',
+                                            border: 'none',
+                                            transition: 'all 0.3s ease',
+                                            position: 'relative'
+                                        }}
+                                    >
+                                        <div style={{
+                                            width: '20px',
+                                            height: '20px',
+                                            background: 'white',
+                                            borderRadius: '50%',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            transform: selectedConversionSubtype === 'Botella Tercio' ? 'translateX(18px)' : 'translateX(0)',
+                                            transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                                            boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
+                                        }}>
+                                            {selectedConversionSubtype === 'Botella Tercio' && <Check size={12} color="var(--accent-color)" strokeWidth={4} />}
+                                        </div>
+                                    </button>
+                                </div>
+
+                                {selectedConversionSubtype !== 'Botella Tercio' && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <label className="text-secondary text-sm">Configurar para:</label>
+                                        <ContainerSelector value={selectedConversionSubtype} onChange={setSelectedConversionSubtype} />
+                                    </div>
+                                )}
                             </div>
 
                             {/* INPUTS NUEVOS: Nombre (Sin Unidades) */}

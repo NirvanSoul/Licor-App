@@ -400,7 +400,7 @@ export const OrderProvider = ({ children }) => {
             return o;
         }));
 
-        const formattedTotal = new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(totalBs);
+        const formattedTotal = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(totalBs);
         showNotification(`Ticket Cerrado: ${formattedTotal} Bs`, 'success');
     };
 

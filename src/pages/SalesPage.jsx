@@ -2,10 +2,71 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AccordionSection from '../components/AccordionSection';
 import ContainerSelector from '../components/ContainerSelector';
-import { Trash2, ShoppingBag, Store, User, Hash, CheckCircle, PlusCircle, X, AlertTriangle, AlertCircle } from 'lucide-react';
+import { Trash2, ShoppingBag, Store, User, Hash, CheckCircle, PlusCircle, X, AlertTriangle, AlertCircle, Check } from 'lucide-react';
 import { useProduct } from '../context/ProductContext';
 import { useOrder } from '../context/OrderContext';
 import './SalesPage.css';
+
+// --- HELPER COMPONENTS ---
+const VarietyToggle = ({ beerVariety, onToggle, isTercio, onTercioToggle }) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {/* Tercio Toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>Tercio</span>
+            <button
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onTercioToggle();
+                }}
+                style={{
+                    width: '42px',
+                    height: '22px',
+                    borderRadius: '11px',
+                    background: isTercio ? 'var(--accent-color)' : 'rgba(128, 128, 128, 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '2px',
+                    cursor: 'pointer',
+                    border: 'none',
+                    transition: 'all 0.3s ease',
+                    position: 'relative'
+                }}
+            >
+                <div style={{
+                    width: '18px',
+                    height: '18px',
+                    background: 'white',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transform: isTercio ? 'translateX(20px)' : 'translateX(0)',
+                    transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                }}>
+                    {isTercio && <Check size={10} color="var(--accent-color)" strokeWidth={4} />}
+                </div>
+            </button>
+        </div>
+
+        {/* Normal/Variado Toggle */}
+        <div className="toggle-switch" style={{ height: '28px', padding: '2px' }}>
+            <button
+                className={`toggle-option ${beerVariety === 'Normal' ? 'active' : ''}`}
+                onClick={(e) => { e.stopPropagation(); onToggle('Normal'); }}
+                style={{ fontSize: '0.7rem', padding: '0 8px' }}
+            >
+                Normal
+            </button>
+            <button
+                className={`toggle-option ${beerVariety === 'Variado' ? 'active' : ''}`}
+                onClick={(e) => { e.stopPropagation(); onToggle('Variado'); }}
+                style={{ fontSize: '0.7rem', padding: '0 8px' }}
+            >
+                Variado
+            </button>
+        </div>
+    </div>
+);
 
 export default function SalesPage() {
     const navigate = useNavigate();
@@ -180,8 +241,8 @@ export default function SalesPage() {
     };
 
     const formatCurrency = (amount) => {
-        if (isNaN(amount)) return '0,00';
-        return new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+        if (isNaN(amount)) return '0.00';
+        return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
     };
 
     const formatUsd = (amount) => {
@@ -210,12 +271,12 @@ export default function SalesPage() {
             consumptionMode: mode
         }));
         if (mode === 'Local') setShowMixedBuilder(false);
-        setOpenSection('emission');
+        setOpenSection('beer');
     };
 
     const handleEmissionSelect = (option) => {
         setOrderState(prev => ({ ...prev, emission: option }));
-        setOpenSection('beer');
+        setOpenSection(null);
     };
 
     const handleVarietyToggle = (variety) => {
@@ -235,7 +296,7 @@ export default function SalesPage() {
         if (orderState.beerVariety === 'Variado' && orderState.consumptionMode === 'Para Llevar') return;
 
         setOrderState(prev => ({ ...prev, beerType: option }));
-        setOpenSection(null);
+        setOpenSection('emission');
     };
 
     const toggleSection = (section) => {
@@ -434,22 +495,7 @@ export default function SalesPage() {
     const increaseQuantity = () => { setOrderState(prev => ({ ...prev, quantity: prev.quantity + 1 })); };
     const decreaseQuantity = () => { setOrderState(prev => ({ ...prev, quantity: prev.quantity > 1 ? prev.quantity - 1 : 1 })); };
 
-    const VarietyToggle = () => (
-        <div className="toggle-switch">
-            <button
-                className={`toggle-option ${orderState.beerVariety === 'Normal' ? 'active' : ''}`}
-                onClick={(e) => { e.stopPropagation(); handleVarietyToggle('Normal'); }}
-            >
-                Normal
-            </button>
-            <button
-                className={`toggle-option ${orderState.beerVariety === 'Variado' ? 'active' : ''}`}
-                onClick={(e) => { e.stopPropagation(); handleVarietyToggle('Variado'); }}
-            >
-                Variado
-            </button>
-        </div>
-    );
+
 
     const isSelectionComplete = () => {
         if (orderState.beerVariety === 'Variado' && orderState.consumptionMode === 'Para Llevar') return false;
@@ -514,38 +560,27 @@ export default function SalesPage() {
                 </div>
             </AccordionSection>
 
-            {/* 2. Forma de Emisión */}
-            <AccordionSection
-                title="Forma de Emisión"
-                isOpen={openSection === 'emission'}
-                onToggle={() => toggleSection('emission')}
-                selectionLabel={orderState.emission ? `${orderState.emission} (${orderState.subtype})` : null}
-                headerAction={
-                    <div onClick={(e) => e.stopPropagation()}>
-                        <ContainerSelector value={orderState.subtype} onChange={(val) => setOrderState(prev => ({ ...prev, subtype: val, emission: null }))} />
-                    </div>
-                }
-            >
-                <div className="options-grid">
-                    {getEmissionsForSubtype(orderState.subtype).map(opt => (
-                        <button
-                            key={opt}
-                            className={`option-btn ${orderState.emission === opt ? 'selected' : ''}`}
-                            onClick={() => handleEmissionSelect(opt)}
-                        >
-                            {opt}
-                        </button>
-                    ))}
-                </div>
-            </AccordionSection>
-
-            {/* 3. Tipo de Cerveza */}
+            {/* 2. Tipo de Cerveza */}
             <AccordionSection
                 title="Tipo de Cerveza"
                 isOpen={openSection === 'beer'}
                 onToggle={() => toggleSection('beer')}
                 selectionLabel={getBeerSelectionLabel()}
-                headerAction={<VarietyToggle />}
+                headerAction={
+                    <VarietyToggle
+                        beerVariety={orderState.beerVariety}
+                        onToggle={handleVarietyToggle}
+                        isTercio={orderState.subtype === 'Botella Tercio'}
+                        onTercioToggle={() => {
+                            const isTercio = orderState.subtype === 'Botella Tercio';
+                            setOrderState(prev => ({
+                                ...prev,
+                                subtype: isTercio ? 'Botella' : 'Botella Tercio',
+                                emission: null
+                            }));
+                        }}
+                    />
+                }
             >
 
                 {(orderState.beerVariety === 'Normal' || (orderState.beerVariety === 'Variado' && orderState.consumptionMode === 'Local')) ? (
@@ -588,6 +623,31 @@ export default function SalesPage() {
                         )}
                     </div>
                 )}
+            </AccordionSection>
+
+            {/* 3. Forma de Emisión */}
+            <AccordionSection
+                title="Forma de Emisión"
+                isOpen={openSection === 'emission'}
+                onToggle={() => toggleSection('emission')}
+                selectionLabel={orderState.emission ? `${orderState.emission} (${orderState.subtype})` : null}
+                headerAction={
+                    <div onClick={(e) => e.stopPropagation()}>
+                        <ContainerSelector value={orderState.subtype} onChange={(val) => setOrderState(prev => ({ ...prev, subtype: val, emission: null }))} />
+                    </div>
+                }
+            >
+                <div className="options-grid">
+                    {getEmissionsForSubtype(orderState.subtype).map(opt => (
+                        <button
+                            key={opt}
+                            className={`option-btn ${orderState.emission === opt ? 'selected' : ''}`}
+                            onClick={() => handleEmissionSelect(opt)}
+                        >
+                            {opt}
+                        </button>
+                    ))}
+                </div>
             </AccordionSection>
 
             {/* --- MIXED BUILDER MODAL --- */}
@@ -753,7 +813,33 @@ export default function SalesPage() {
                     <div className="summary-row">
                         <div className="quantity-controls" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <button onClick={decreaseQuantity} className="qty-btn" style={{ width: '24px', height: '24px', borderRadius: '50%', border: '1px solid var(--accent-light)', background: 'var(--bg-card)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>-</button>
-                            <span className="summary-item"><b>{orderState.quantity}x</b></span>
+                            <input
+                                type="number"
+                                inputMode="numeric"
+                                value={orderState.quantity}
+                                onChange={(e) => {
+                                    const val = parseInt(e.target.value, 10);
+                                    if (!isNaN(val)) {
+                                        setOrderState(prev => ({ ...prev, quantity: Math.max(1, val) }));
+                                    } else if (e.target.value === '') {
+                                        setOrderState(prev => ({ ...prev, quantity: 1 }));
+                                    }
+                                }}
+                                onFocus={(e) => e.target.select()}
+                                style={{
+                                    fontSize: '1rem',
+                                    fontWeight: 700,
+                                    color: 'var(--text-primary)',
+                                    width: '80px',
+                                    textAlign: 'center',
+                                    background: 'transparent',
+                                    border: 'none',
+                                    outline: 'none',
+                                    WebkitAppearance: 'none',
+                                    MozAppearance: 'textfield',
+                                    padding: '0'
+                                }}
+                            />
                             <button onClick={increaseQuantity} className="qty-btn" style={{ width: '24px', height: '24px', borderRadius: '50%', border: '1px solid var(--accent-light)', background: 'var(--bg-card)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
                             <span className="summary-item" style={{ marginLeft: '8px' }}>
                                 {getBeerSelectionLabel() || `${orderState.beerType} (${orderState.emission})`}

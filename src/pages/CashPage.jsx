@@ -17,7 +17,7 @@ export function CashPageContent() {
 
     // Defensive Context Access
     const pendingOrders = orderContext?.pendingOrders || [];
-    const { getPrice, exchangeRates, inventory, beerTypes, subtypes, getUnitsPerEmission, currencySymbol, getCostPrice, getInventoryAssetValue } = productContext || {};
+    const { getPrice, exchangeRates, currentRate, inventory, beerTypes, subtypes, getUnitsPerEmission, currencySymbol, getCostPrice, getInventoryAssetValue } = productContext || {};
     const { showNotification } = notificationContext || { showNotification: () => { } };
 
     const [showDailyDetailModal, setShowDailyDetailModal] = useState(false);
@@ -143,8 +143,10 @@ export function CashPageContent() {
                             const unitsPerPack = getUnitsPerEmission ? (getUnitsPerEmission(emission, subtype) || 1) : 1;
                             const totalUnits = (item.quantity || 1) * unitsPerPack;
 
-                            if (!productCounts[name]) productCounts[name] = 0;
-                            productCounts[name] += totalUnits;
+                            // Include subtype in rank key to distinguish Tercio
+                            const rankKey = subtype !== 'Botella' ? `${name} (${subtype})` : name;
+                            if (!productCounts[rankKey]) productCounts[rankKey] = 0;
+                            productCounts[rankKey] += totalUnits;
                         });
                     }
                 }
@@ -308,7 +310,7 @@ export function CashPageContent() {
             return;
         }
 
-        const rate = exchangeRates.bcv || 0;
+        const rate = currentRate || 0;
 
         const summaryData = todaysSales.map(sale => {
             // 1. Detailed Consumption Logic
@@ -317,10 +319,11 @@ export function CashPageContent() {
             sale.items.forEach(item => {
                 const name = item.beerType || item.name;
                 const emission = item.emission || 'Unidad';
+                const subtype = item.subtype || 'Botella';
                 const qty = item.quantity || 1;
 
-                // Aggregate Consumption
-                const detailKey = `${name} - ${emission}`;
+                // Aggregate Consumption - Include Subtype info (Tercio/Lata)
+                const detailKey = subtype !== 'Botella' ? `${name} [${subtype}] - ${emission}` : `${name} - ${emission}`;
                 if (!consumptionMap[detailKey]) consumptionMap[detailKey] = 0;
                 consumptionMap[detailKey] += qty;
             });
@@ -352,7 +355,7 @@ export function CashPageContent() {
     };
 
     const handleShareSale = (sale) => {
-        const rate = exchangeRates.bcv || 0;
+        const rate = currentRate || 0;
         const dateStr = new Date(sale.closedAt).toLocaleDateString();
         const timeStr = new Date(sale.closedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -370,7 +373,7 @@ export function CashPageContent() {
             `*Pago:* ${displayPayment(sale.paymentMethod)}\n\n` +
             `*Consumo:*\n${itemsStr}\n\n` +
             `*Total:* $${sale.total.toFixed(2)}\n` +
-            `*Total Bs:* ${(sale.total * rate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n\n` +
+            `*Total Bs:* ${(sale.total * rate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n\n` +
             `¡Gracias por su preferencia!`;
 
         const copyToClipboard = (text) => {
@@ -407,7 +410,7 @@ export function CashPageContent() {
             });
     };
 
-    const rate = exchangeRates.bcv || 0;
+    const rate = currentRate || 0;
     const totalSalesBs = todayStats.totalSales * rate;
 
     // --- REUSABLE CHART COMPONENT ---
@@ -820,12 +823,12 @@ export function CashPageContent() {
                             }}>
                                 <div style={{ fontSize: '0.85rem', opacity: 0.95, fontWeight: 500 }}>Balance Neto (Semanal)</div>
                                 <div style={{ fontSize: '2.5rem', fontWeight: 800, margin: '0.5rem 0' }}>
-                                    {currencySymbol}{profitStats.weekNet.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                    {currencySymbol}{profitStats.weekNet.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                                 </div>
                                 <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem', opacity: 0.9 }}>
                                     <span>Margen: {profitStats.weekMargin.toFixed(1)}%</span>
                                     <span>•</span>
-                                    <span>Bs {(profitStats.weekNet * (exchangeRates.bcv || 0)).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                    <span>Bs {(profitStats.weekNet * (exchangeRates.bcv || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                 </div>
                             </div>
 
@@ -835,7 +838,7 @@ export function CashPageContent() {
                                 <div className="dashboard-card" style={{ background: 'rgba(128, 128, 128, 0.05)', border: '1px solid rgba(128, 128, 128, 0.1)', padding: '1rem' }}>
                                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Ingreso Bruto</div>
                                     <div style={{ fontSize: '1.2rem', fontWeight: 800, marginTop: '4px' }}>
-                                        {currencySymbol}{profitStats.weekRevenue.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                        {currencySymbol}{profitStats.weekRevenue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                                     </div>
                                     <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '2px', opacity: 0.7 }}>
                                         Total Facturado
@@ -845,7 +848,7 @@ export function CashPageContent() {
                                 <div className="dashboard-card" style={{ background: 'rgba(128, 128, 128, 0.05)', border: '1px solid rgba(128, 128, 128, 0.1)', padding: '1rem' }}>
                                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Costo Productos</div>
                                     <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#ef4444', marginTop: '4px' }}>
-                                        -{currencySymbol}{profitStats.weekCOGS.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                        -{currencySymbol}{profitStats.weekCOGS.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                                     </div>
                                     <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '2px', opacity: 0.7 }}>
                                         Inversión Vendida
@@ -869,7 +872,7 @@ export function CashPageContent() {
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
                                     <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#2563eb' }}>
-                                        {currencySymbol}{(profitStats?.inventoryValue || 0).toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                        {currencySymbol}{(profitStats?.inventoryValue || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                                     </div>
                                 </div>
                             </div>
@@ -897,7 +900,7 @@ export function CashPageContent() {
                             {currencySymbol}{(todayStats?.totalSales || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
                         </div>
                         <div className="sub-value">
-                            Bs {(totalSalesBs || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                            Bs {(totalSalesBs || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </div>
                         <div style={{ marginTop: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.95rem', fontWeight: 600 }}>
                             <Activity size={18} />
@@ -940,7 +943,7 @@ export function CashPageContent() {
                             fontWeight: 600,
                             marginBottom: '1rem'
                         }}>
-                            Bs {((profitStats?.weekNet || 0) * rate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                            Bs {((profitStats?.weekNet || 0) * rate).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </div>
 
                         <div style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -988,7 +991,9 @@ export function CashPageContent() {
                                                 const qty = item.quantity || 1;
                                                 const name = item.beerType || item.name;
                                                 const emission = item.emission || 'Unidad';
-                                                return `${qty} ${name} (${emission})`;
+                                                const subtype = item.subtype || 'Botella';
+                                                const formatStr = subtype !== 'Botella' ? `[${subtype}] ` : '';
+                                                return `${qty} ${name} ${formatStr}(${emission})`;
                                             }).join(', ')}
                                         </div>
                                         <div className="td-cell user-cell">
@@ -1177,16 +1182,19 @@ export function CashPageContent() {
                                                     </div>
                                                 </div>
 
-                                                {/* Consumption Items */}
-                                                <div className="report-consumption-box">
-                                                    {sale.items.map((item, idx) => {
-                                                        const qty = item.quantity || 1;
+                                                {/* Detailed Consumption Items */}
+                                                <div className="report-consumption-box" style={{ padding: '10px 0' }}>
+                                                    {(sale.items || []).map((item, idx) => {
                                                         const name = item.beerType || item.name;
                                                         const emission = item.emission || 'Unidad';
+                                                        const subtype = item.subtype || 'Botella';
+                                                        const qty = item.quantity || 1;
                                                         return (
                                                             <div key={idx} className="consumption-item">
                                                                 <div className="consumption-dot" style={{ background: methodColor }} />
-                                                                <span>{qty} {name} <span style={{ opacity: 0.6, fontSize: '0.8rem' }}>({emission})</span></span>
+                                                                <span>
+                                                                    {qty} {name} {subtype !== 'Botella' && <span style={{ color: '#f97316', fontWeight: 600 }}>[{subtype}]</span>} <span style={{ opacity: 0.6, fontSize: '0.8rem' }}>({emission})</span>
+                                                                </span>
                                                             </div>
                                                         );
                                                     })}
