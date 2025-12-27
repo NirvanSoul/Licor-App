@@ -8,6 +8,8 @@ import SettingsPage from './pages/SettingsPage';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import CompleteRegistration from './pages/CompleteRegistration';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import DeveloperPage from './pages/DeveloperPage';
 
 import ScrollToTop from './components/ScrollToTop';
@@ -18,6 +20,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { AnalyticsProvider } from './context/AnalyticsContext'; // NEW
 import NotificationToast from './components/NotificationToast';
+import AuthListener from './components/AuthListener';
 import DevTools from './components/DevTools';
 
 // Private Route Wrapper
@@ -33,6 +36,7 @@ function App() {
   return (
     <AuthProvider>
       <NotificationProvider>
+        <AuthListener />
         <ThemeProvider>
           <ProductProvider>
             <OrderProvider>
@@ -45,6 +49,8 @@ function App() {
                     {/* Public Routes */}
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/complete-registration" element={<CompleteRegistration />} />
 
                     {/* Protected Routes */}

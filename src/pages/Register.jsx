@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { useNavigate, Link } from 'react-router-dom';
 import { UserPlus, Store, Eye, EyeOff, PartyPopper } from 'lucide-react';
+import './SalesPage.css';
 
 export default function Register() {
     const navigate = useNavigate();
@@ -96,11 +97,11 @@ export default function Register() {
             }}>
                 <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
                     <div style={{
-                        background: '#000', width: '48px', height: '48px',
-                        borderRadius: '12px', display: 'flex', alignItems: 'center',
-                        justifyContent: 'center', margin: '0 auto 1rem auto'
+                        width: '64px', height: '64px',
+                        display: 'flex', alignItems: 'center',
+                        justifyContent: 'center', margin: '0 auto 1.5rem auto'
                     }}>
-                        <UserPlus color="white" size={24} />
+                        <img src="/KavasAppLogo.svg" alt="Kavas App Logo" style={{ width: '100%', height: '100%' }} />
                     </div>
                     <h2 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>Crear Cuenta</h2>
                     <p style={{ color: '#666', marginTop: '0.5rem' }}>Únete a la plataforma</p>
@@ -204,12 +205,8 @@ export default function Register() {
                     <button
                         type="submit"
                         disabled={loading}
-                        style={{
-                            background: '#000', color: 'white', padding: '1rem',
-                            borderRadius: '16px', border: 'none', fontSize: '1rem',
-                            fontWeight: 600, cursor: 'pointer', marginTop: '0.5rem',
-                            opacity: loading ? 0.7 : 1
-                        }}
+                        className="btn-primary-gradient"
+                        style={{ marginTop: '0.5rem' }}
                     >
                         {loading ? 'Registrando...' : 'Registrarse'}
                     </button>
@@ -246,10 +243,7 @@ export default function Register() {
                         <p style={{ color: '#666', marginBottom: '2rem' }}>Tu licorería ha sido registrada.</p>
                         <button
                             onClick={() => navigate('/login')}
-                            style={{
-                                background: '#000', color: 'white', width: '100%', padding: '16px',
-                                borderRadius: '20px', border: 'none', fontWeight: 700, cursor: 'pointer'
-                            }}
+                            className="btn-primary-gradient"
                         >
                             Ir a Iniciar Sesión
                         </button>

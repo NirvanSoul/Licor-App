@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNotification } from '../context/NotificationContext';
 import { supabase } from '../supabaseClient';
-import { Trash2, Plus, Save, ChevronRight, ChevronLeft, CircleDollarSign, Users, Package, Star, Box, Send, LogOut, Moon, Sun, Store, ShoppingBag, Search, ChevronDown, ChevronUp, X, Pencil, Check } from 'lucide-react';
+import { Trash2, Plus, Save, ChevronRight, ChevronLeft, CircleDollarSign, Users, Package, Star, Box, Send, LogOut, Moon, Sun, Store, ShoppingBag, Search, ChevronDown, ChevronUp, X, Pencil, Check, ShieldCheck, Key } from 'lucide-react';
 import AccordionSection from '../components/AccordionSection';
 import StockManager from '../components/StockManager';
 import ContainerSelector from '../components/ContainerSelector';
@@ -59,6 +59,12 @@ const smartSearchMatch = (text, fullQuery) => {
     const terms = fullQuery.toLowerCase().split(' ').filter(t => t.length > 0);
     if (terms.length === 0) return true;
     return terms.every(term => isFuzzyMatch(text, term));
+};
+
+const formatDate = (dateString) => {
+    if (!dateString) return '---';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
 };
 
 const getGlobalSearchScore = (beerName, fullQuery, allActiveEmissions = []) => {
@@ -746,7 +752,7 @@ export default function SettingsPage() {
         mainCurrency, setMainCurrency
     } = useProduct();
 
-    const { user, role, organizationId, organizationName, logout } = useAuth();
+    const { user, role, organizationId, organizationName, isLicenseActive, refreshLicense, logout } = useAuth();
     const { theme, toggleTheme } = useTheme();
     const { showNotification } = useNotification();
 
@@ -769,6 +775,114 @@ export default function SettingsPage() {
     const [pickerPos, setPickerPos] = useState({ top: 0, left: 0 });
 
     // Invite State (Already declared above)
+    const [activationKey, setActivationKey] = useState('');
+    const [activationStatus, setActivationStatus] = useState({ loading: false, success: false, error: '' });
+    const [licenseInfo, setLicenseInfo] = useState(null);
+
+    // Fetch license info on load
+    useEffect(() => {
+        const fetchLicense = async () => {
+            if (role && ['master', 'owner', 'admin', 'manager', 'developer'].some(r => role.toLowerCase().includes(r))) {
+                const { data, error } = await supabase
+                    .from('organizations')
+                    .select('license_key, is_active, plan_type, license_expires_at')
+                    .eq('id', organizationId)
+                    .single();
+                if (data) setLicenseInfo(data);
+            }
+        };
+        fetchLicense();
+    }, [role, organizationId, currentView]);
+
+    const getPlanLabel = (type) => {
+        switch (type?.toLowerCase()) {
+            case 'yearly': return 'ANUAL';
+            case 'free': return 'PRUEBA GRATUITA';
+            case 'monthly': return '30 Días';
+            default: return type?.toUpperCase() || 'PREMIUM';
+        }
+    };
+
+    const handleActivate = async (e) => {
+        e.preventDefault();
+        setActivationStatus({ loading: true, success: false, error: '' });
+
+        try {
+            // 1. Check key in database
+            const { data: keyData, error: keyError } = await supabase
+                .from('license_keys')
+                .select('*')
+                .eq('key', activationKey)
+                .eq('status', 'available')
+                .single();
+
+            if (keyError || !keyData) {
+                throw new Error("Clave inválida, expirada o ya utilizada.");
+            }
+
+            // 2. Mark key as used (CRITICAL: We do this before updating org to ensure it's not reused)
+            const { data: updateCheck, error: markError } = await supabase
+                .from('license_keys')
+                .update({
+                    status: 'used',
+                    used_by_org_id: organizationId,
+                    used_at: new Date().toISOString()
+                })
+                .eq('id', keyData.id)
+                .eq('status', 'available') // Double check availability during update
+                .select();
+
+            if (markError || !updateCheck || updateCheck.length === 0) {
+                throw new Error("No se pudo procesar la llave. Quizás ya fue utilizada.");
+            }
+
+            // 3. Update organization
+            const activationDate = new Date();
+            const expirationDate = new Date();
+
+            if (keyData.plan_type === 'yearly') {
+                expirationDate.setFullYear(activationDate.getFullYear() + 1);
+            } else {
+                expirationDate.setDate(activationDate.getDate() + 30);
+            }
+
+            const { error } = await supabase
+                .from('organizations')
+                .update({
+                    license_key: activationKey,
+                    is_active: true,
+                    plan_type: keyData.plan_type || 'premium',
+                    license_activated_at: activationDate.toISOString(),
+                    license_expires_at: expirationDate.toISOString()
+                })
+                .eq('id', organizationId);
+
+            if (error) throw error;
+
+            setActivationStatus({ loading: false, success: true, error: '' });
+            showNotification('¡Licencia activada correctamente!', 'success');
+
+            // Refresh global auth state immediately
+            await refreshLicense(true);
+
+            // Refresh info
+            setLicenseInfo(prev => ({
+                ...prev,
+                license_key: activationKey,
+                is_active: true,
+                plan_type: keyData.plan_type || 'premium',
+                license_expires_at: expirationDate.toISOString()
+            }));
+            setActivationKey('');
+
+            // STAY ON PAGE. Don't redirect so user sees the success state card.
+
+        } catch (err) {
+            console.error(err);
+            setActivationStatus({ loading: false, success: false, error: err.message || 'Error al activar' });
+            showNotification('Error al activar licencia', 'error');
+        }
+    };
 
     // --- Actions ---
 
@@ -894,33 +1008,93 @@ export default function SettingsPage() {
 
 
 
-    const MainMenu = () => (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
-            {[
-                { id: 'products', label: 'Gestion de Productos', icon: Package, color: '#4ade80' },
-                { id: 'dashboard', label: 'Precios Actuales', icon: Star, color: '#3b82f6' },
-                { id: 'inventory', label: 'Inventario', icon: Box, color: '#a3e635' },
-                { id: 'bcv', label: 'Tasas', icon: CircleDollarSign, color: '#f97316' },
-                { id: 'users', label: 'Usuarios', icon: Users, color: '#ef4444' },
-                { id: 'app', label: 'Apariencia', icon: Sun, color: '#6366f1' },
-            ].map(item => (
-                <button
-                    key={item.id}
-                    className="option-btn"
-                    onClick={() => setCurrentView(item.id)}
-                    style={{ height: 'auto', padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '16px', background: 'var(--bg-card)', border: 'none' }}
-                >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                        <div style={{ background: item.color, width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '12px', flexShrink: 0, boxShadow: `0 4px 12px ${item.color}40` }}>
-                            <item.icon size={20} color="white" />
-                        </div>
-                        <span style={{ fontSize: '1rem', fontWeight: 500, color: 'var(--text-primary)' }}>{item.label}</span>
+    const MainMenu = () => {
+        const isInactive = isLicenseActive === false;
+
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+                {isInactive && (
+                    <div style={{
+                        background: 'rgba(234, 88, 12, 0.1)',
+                        border: '1px solid #f97316',
+                        padding: '1rem',
+                        borderRadius: '16px',
+                        marginBottom: '1rem',
+                        textAlign: 'center',
+                        color: '#f97316',
+                        fontWeight: 600
+                    }}>
+                        Para usar las funciones del menú Ajustes activa la licencia.
                     </div>
-                    <ChevronRight size={20} color="#999" />
+                )}
+                {[
+                    { id: 'products', label: 'Gestion de Productos', icon: Package, color: '#4ade80' },
+                    { id: 'dashboard', label: 'Precios Actuales', icon: Star, color: '#3b82f6' },
+                    { id: 'inventory', label: 'Inventario', icon: Box, color: '#a3e635' },
+                    { id: 'bcv', label: 'Tasas', icon: CircleDollarSign, color: '#f97316' },
+                    { id: 'users', label: 'Usuarios', icon: Users, color: '#ef4444' },
+                    { id: 'app', label: 'Apariencia', icon: Sun, color: '#6366f1' },
+                    // Only show Activation for Leaders (Including Developer for testing/access)
+                    ...((role && ['master', 'owner', 'admin', 'manager', 'developer'].some(r => role.toLowerCase().includes(r))) ? [{ id: 'activation', label: 'Activación', icon: ShieldCheck, color: '#10b981' }] : [])
+                ].map(item => {
+                    const isDisabled = isInactive && item.id !== 'activation';
+                    return (
+                        <button
+                            key={item.id}
+                            className={`option-btn ${isDisabled ? 'disabled' : ''}`}
+                            onClick={() => !isDisabled && setCurrentView(item.id)}
+                            style={{
+                                height: 'auto',
+                                padding: '1rem 1.5rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                borderRadius: '16px',
+                                background: 'var(--bg-card)',
+                                border: 'none',
+                                opacity: isDisabled ? 0.5 : 1,
+                                cursor: isDisabled ? 'not-allowed' : 'pointer'
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                <div style={{ background: item.color, width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '12px', flexShrink: 0, boxShadow: `0 4px 12px ${item.color}40` }}>
+                                    <item.icon size={20} color="white" />
+                                </div>
+                                <span style={{ fontSize: '1rem', fontWeight: 500, color: 'var(--text-primary)' }}>{item.label}</span>
+                            </div>
+                            {!isDisabled && <ChevronRight size={20} color="#999" />}
+                        </button>
+                    );
+                })}
+
+                {/* Logout Button */}
+                <button
+                    onClick={logout}
+                    style={{
+                        marginTop: '1rem',
+                        height: 'auto',
+                        padding: '1rem 1.5rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '1rem',
+                        borderRadius: '16px',
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        border: '1px solid rgba(239, 68, 68, 0.2)',
+                        cursor: 'pointer',
+                        width: '100%',
+                        transition: 'all 0.2s ease'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'}
+                    onMouseOut={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
+                >
+                    <div style={{ background: '#ef4444', width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '12px', flexShrink: 0, boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)' }}>
+                        <LogOut size={20} color="white" />
+                    </div>
+                    <span style={{ fontSize: '1rem', fontWeight: 600, color: '#ef4444' }}>Cerrar Sesión</span>
                 </button>
-            ))}
-        </div>
-    );
+            </div>
+        );
+    };
 
     return (
         <div className="sales-container-v2" style={{ padding: '1rem' }}>
@@ -942,6 +1116,7 @@ export default function SettingsPage() {
                     {currentView === 'users' && 'Usuarios'}
                     {currentView === 'inventory' && 'Inventario'}
                     {currentView === 'app' && 'Apariencia'}
+                    {currentView === 'activation' && 'Activación de Licencia'}
                 </h1>
             </div>
 
@@ -1382,12 +1557,111 @@ export default function SettingsPage() {
                                     </form>
                                 </div>
                             )}
-                            <button onClick={logout} style={{ background: '#fee2e2', color: '#991b1b', padding: '1rem', borderRadius: '16px', border: 'none', width: '100%', fontWeight: 600, cursor: 'pointer' }}>Cerrar Sesión</button>
                         </div>
                     </div>
                 )
             }
 
+
+
+            {
+                currentView === 'activation' && (
+                    <div className="order-summary-card">
+                        <div style={{ padding: '2rem', textAlign: 'center' }}>
+                            <div style={{
+                                width: '80px', height: '80px',
+                                background: licenseInfo?.is_active ? 'rgba(16, 185, 129, 0.1)' : 'rgba(234, 88, 12, 0.1)',
+                                borderRadius: '50%',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                margin: '0 auto 1.5rem auto'
+                            }}>
+                                <Key size={40} color={licenseInfo?.is_active ? '#10b981' : '#f97316'} />
+                            </div>
+
+                            <h2 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>
+                                {role === 'DEVELOPER' ? 'Modo Desarrollador' : (licenseInfo?.is_active ? 'Licencia Activa' : 'Activar Producto')}
+                            </h2>
+
+                            <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem', maxWidth: '400px', margin: '0 auto 2rem' }}>
+                                {role === 'DEVELOPER'
+                                    ? 'Tienes acceso total e ilimitado a todas las funciones del sistema por ser Administrador de Sistema.'
+                                    : (licenseInfo?.is_active
+                                        ? `Tu licencia ${getPlanLabel(licenseInfo.plan_type)} está funcionando correctamente. Disfruta de todas las funciones.`
+                                        : 'Ingresa tu clave de producto única para desbloquear todas las funcionalidades de la aplicación.')}
+                            </p>
+
+                            {/* CRITICAL CHECK: Show form ONLY if local state AND global state say it is inactive */}
+                            {(!licenseInfo?.is_active && isLicenseActive === false) ? (
+                                <form onSubmit={handleActivate} style={{ maxWidth: '400px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    <div style={{ textAlign: 'left' }}>
+                                        <label style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px', display: 'block' }}>Clave de Licencia</label>
+                                        <input
+                                            type="text"
+                                            placeholder="XXXX-XXXX-XXXX-XXXX"
+                                            value={activationKey}
+                                            onChange={(e) => setActivationKey(e.target.value.toUpperCase())}
+                                            className="ticket-input-large"
+                                            style={{
+                                                textAlign: 'center',
+                                                letterSpacing: '2px',
+                                                fontWeight: 'bold',
+                                                textTransform: 'uppercase'
+                                            }}
+                                        />
+                                    </div>
+
+                                    <button
+                                        type="submit"
+                                        disabled={activationStatus.loading || !activationKey}
+                                        className="btn-primary-gradient"
+                                    >
+                                        {activationStatus.loading ? 'Activando...' : 'Activar Licencia'}
+                                    </button>
+
+                                    {activationStatus.error && (
+                                        <p style={{ color: '#ef4444', fontSize: '0.9rem', marginTop: '0.5rem' }}>
+                                            {activationStatus.error}
+                                        </p>
+                                    )}
+                                </form>
+                            ) : (
+                                <div style={{ background: 'var(--bg-card-hover)', padding: '1.5rem', borderRadius: '16px', maxWidth: '400px', margin: '0 auto', border: '1px solid var(--accent-light)' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                                        <span style={{ color: 'var(--text-secondary)' }}>Estado</span>
+                                        <span style={{ color: '#10b981', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <Check size={16} /> {role === 'DEVELOPER' ? 'Acceso Vitalicio' : 'Activo'}
+                                        </span>
+                                    </div>
+                                    {role !== 'DEVELOPER' ? (
+                                        <>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                                                <span style={{ color: 'var(--text-secondary)' }}>Próximo cobro</span>
+                                                <span style={{ fontWeight: 'bold', color: '#f97316' }}>
+                                                    {formatDate(licenseInfo.license_expires_at)}
+                                                </span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                                                <span style={{ color: 'var(--text-secondary)' }}>Plan</span>
+                                                <span style={{ fontWeight: 'bold', color: licenseInfo.plan_type?.toLowerCase() === 'free' ? '#94a3b8' : '#3b82f6' }}>
+                                                    {getPlanLabel(licenseInfo.plan_type)}
+                                                </span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <span style={{ color: 'var(--text-secondary)' }}>Clave</span>
+                                                <span style={{ fontFamily: 'monospace', fontSize: '0.9rem' }}>•••• •••• •••• {licenseInfo.license_key ? licenseInfo.license_key.slice(-4) : '****'}</span>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div style={{ textAlign: 'center', padding: '10px 0', borderTop: '1px solid var(--accent-light)', marginTop: '10px' }}>
+                                            <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Perfil: Administrador de Sistema</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )
+            }
             {
                 currentView === 'products' && (
                     <>

@@ -207,3 +207,37 @@ input[type=number].no-spin {
   border-color: var(--text-primary);
   box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.05);
 }
+
+/* Global Primary Gradient Button */
+.btn-primary-gradient {
+  background: linear-gradient(135deg, #FA8E36 0%, #F97316 100%) !important;
+  color: white !important;
+  padding: 1rem;
+  border-radius: 16px;
+  border: none;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(250, 142, 54, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: block;
+  width: 100%;
+  text-align: center;
+  text-decoration: none;
+  outline: none;
+}
+
+.btn-primary-gradient:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(250, 142, 54, 0.4);
+}
+
+.btn-primary-gradient:active {
+  transform: translateY(-1px);
+}
+
+.btn-primary-gradient:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}

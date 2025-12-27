@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LogIn, Eye, EyeOff } from 'lucide-react';
+import './SalesPage.css';
 
 export default function Login() {
     const navigate = useNavigate();
@@ -43,11 +44,11 @@ export default function Login() {
             }}>
                 <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
                     <div style={{
-                        background: '#000', width: '48px', height: '48px',
-                        borderRadius: '12px', display: 'flex', alignItems: 'center',
-                        justifyContent: 'center', margin: '0 auto 1rem auto'
+                        width: '64px', height: '64px',
+                        display: 'flex', alignItems: 'center',
+                        justifyContent: 'center', margin: '0 auto 1.5rem auto'
                     }}>
-                        <LogIn color="white" size={24} />
+                        <img src="/KavasAppLogo.svg" alt="Kavas App Logo" style={{ width: '100%', height: '100%' }} />
                     </div>
                     <h2 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>Iniciar Sesión</h2>
                     <p style={{ color: '#666', marginTop: '0.5rem' }}>Bienvenido de nuevo</p>
@@ -107,12 +108,8 @@ export default function Login() {
                     <button
                         type="submit"
                         disabled={loading}
-                        style={{
-                            background: '#000', color: 'white',
-                            padding: '1rem', borderRadius: '16px', border: 'none',
-                            fontSize: '1rem', fontWeight: 600, cursor: 'pointer',
-                            marginTop: '1rem', opacity: loading ? 0.7 : 1
-                        }}
+                        className="btn-primary-gradient"
+                        style={{ marginTop: '1rem' }}
                     >
                         {loading ? 'Entrando...' : 'Ingresar'}
                     </button>
@@ -123,6 +120,11 @@ export default function Login() {
                     <Link to="/register" style={{ color: '#000', fontWeight: 600, textDecoration: 'none' }}>
                         Regístrate
                     </Link>
+                    <div style={{ marginTop: '0.75rem' }}>
+                        <Link to="/forgot-password" style={{ color: '#666', fontSize: '0.85rem', textDecoration: 'none' }}>
+                            ¿Olvidaste tu contraseña?
+                        </Link>
+                    </div>
                 </div>
             </div>
         </div>
