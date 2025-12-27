@@ -110,11 +110,17 @@ export default function ResetPassword() {
                                                 type="button"
                                                 onClick={() => setShowPassword(!showPassword)}
                                                 style={{
-                                                    position: 'absolute', right: '14px', top: '50%',
-                                                    transform: 'translateY(-50%)', background: 'none',
-                                                    border: 'none', cursor: 'pointer', color: 'var(--text-secondary)',
+                                                    position: 'absolute',
+                                                    right: '14px',
+                                                    top: '50%',
+                                                    transform: 'translateY(-50%)',
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    cursor: 'pointer',
+                                                    color: 'var(--text-secondary)',
                                                     display: 'flex',
-                                                    alignItems: 'center'
+                                                    alignItems: 'center',
+                                                    padding: '4px'
                                                 }}
                                             >
                                                 {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}

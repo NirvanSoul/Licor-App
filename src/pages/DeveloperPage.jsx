@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Activity, MousePointer, Layout, Map, RefreshCcw, Key, Copy, Plus, Trash2, Lock, X, CheckCircle2 } from 'lucide-react';
+import { Shield, Activity, MousePointer, Layout, Map, RefreshCcw, Key, Copy, Plus, Trash2, Lock, X, CheckCircle2, Database, RefreshCw } from 'lucide-react';
+import { generateFakeData, clearAllData } from '../utils/DevDataGenerator';
 
 export default function DeveloperPage() {
     const { role, loading } = useAuth();
@@ -26,11 +27,21 @@ export default function DeveloperPage() {
     const [isVerifying, setIsVerifying] = useState(false);
     const [mfaError, setMfaError] = useState('');
 
+    const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+    useEffect(() => {
+        const handleResize = () => setWindowWidth(window.innerWidth);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
     useEffect(() => {
         if (!loading && role !== 'DEVELOPER') {
             navigate('/');
         }
     }, [role, loading, navigate]);
+
+    const isMobile = windowWidth < 768;
 
     const fetchEvents = async () => {
         const { data, error } = await supabase
@@ -314,41 +325,60 @@ export default function DeveloperPage() {
         if (!selectedPath && topPages.length > 0) setSelectedPath(topPages[0].path);
     };
 
-    if (loading) return <div>Cargando...</div>;
+    if (loading) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-app)', color: 'white' }}>Cargando...</div>;
 
     const heatmapPoints = events.filter(e => e.event_type === 'CLICK' && e.path === selectedPath && e.x && e.y);
 
     return (
-        <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto', paddingBottom: '100px', minHeight: '100vh' }}>
+        <div style={{ padding: isMobile ? '1rem' : '2rem', maxWidth: '1200px', margin: '0 auto', paddingBottom: '100px', minHeight: '100vh', background: 'var(--bg-app)' }}>
             {/* Header section */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '3rem' }}>
+            <div style={{
+                display: 'flex',
+                flexDirection: isMobile ? 'column' : 'row',
+                alignItems: isMobile ? 'flex-start' : 'center',
+                gap: isMobile ? '1rem' : '1.5rem',
+                marginBottom: isMobile ? '2rem' : '3rem'
+            }}>
                 <div style={{
                     background: 'linear-gradient(135deg, #00ff88 0%, #00bd68 100%)',
                     color: '#000',
-                    padding: '16px',
-                    borderRadius: '20px',
+                    padding: isMobile ? '12px' : '16px',
+                    borderRadius: '16px',
                     boxShadow: '0 8px 24px rgba(0, 255, 136, 0.2)'
                 }}>
-                    <Shield size={32} />
+                    <Shield size={isMobile ? 24 : 32} />
                 </div>
                 <div>
-                    <h1 style={{ margin: 0, fontSize: '2.2rem', fontWeight: 800, letterSpacing: '-0.5px' }}>Developer Console</h1>
-                    <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '1.1rem' }}>Sistemas de Control & Analíticas Avanzadas</p>
+                    <h1 style={{ margin: 0, fontSize: isMobile ? '1.5rem' : '2.2rem', fontWeight: 800, letterSpacing: '-0.5px' }}>Developer Console</h1>
+                    <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: isMobile ? '0.9rem' : '1.1rem' }}>Sistemas de Control & Analíticas Avanzadas</p>
                 </div>
             </div>
 
-            {/* Navigation Tabs */}
-            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '2.5rem', background: 'var(--bg-card)', padding: '6px', borderRadius: '16px', width: 'fit-content', border: '1px solid var(--accent-light)' }}>
+            {/* Navigation Tabs - Horizontal Scroll on mobile */}
+            <div style={{
+                display: 'flex',
+                gap: '0.5rem',
+                marginBottom: '2rem',
+                background: 'var(--bg-card)',
+                padding: '6px',
+                borderRadius: '16px',
+                width: isMobile ? '100%' : 'fit-content',
+                border: '1px solid var(--accent-light)',
+                overflowX: 'auto',
+                WebkitOverflowScrolling: 'touch',
+                scrollbarWidth: 'none'
+            }}>
                 {[
-                    { id: 'STATS', icon: Activity, label: 'Panel Control' },
-                    { id: 'HEATMAP', icon: Map, label: 'Mapa de Calor' },
-                    { id: 'LICENSE', icon: Key, label: 'Gestión Licencias' }
+                    { id: 'STATS', icon: Activity, label: 'Panel' },
+                    { id: 'HEATMAP', icon: Map, label: 'Heatmap' },
+                    { id: 'LICENSE', icon: Key, label: 'Licencias' },
+                    { id: 'TOOLS', icon: Database, label: 'DevTools' }
                 ].map(tab => (
                     <button
                         key={tab.id}
                         onClick={() => setViewMode(tab.id)}
                         style={{
-                            padding: '10px 24px',
+                            padding: isMobile ? '8px 16px' : '10px 24px',
                             borderRadius: '12px',
                             background: viewMode === tab.id ? 'var(--text-primary)' : 'transparent',
                             color: viewMode === tab.id ? 'var(--bg-card)' : 'var(--text-secondary)',
@@ -356,40 +386,43 @@ export default function DeveloperPage() {
                             fontWeight: 700,
                             cursor: 'pointer',
                             display: 'flex',
-                            gap: '10px',
+                            gap: '8px',
                             alignItems: 'center',
-                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0,
+                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                            fontSize: isMobile ? '0.85rem' : '1rem'
                         }}
                     >
-                        <tab.icon size={18} /> {tab.label}
+                        <tab.icon size={isMobile ? 16 : 18} /> {tab.label}
                     </button>
                 ))}
             </div>
 
             {viewMode === 'STATS' && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem' }}>
-                    <div style={{ background: 'var(--bg-card)', padding: '2rem', borderRadius: '24px', border: '1px solid var(--accent-light)', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
-                        <h3 style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: 0, fontSize: '1.3rem', marginBottom: '1.5rem' }}>
-                            <Layout size={22} color="#3b82f6" /> Navegación de Páginas
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap: isMobile ? '1rem' : '2rem' }}>
+                    <div style={{ background: 'var(--bg-card)', padding: isMobile ? '1.25rem' : '2rem', borderRadius: '24px', border: '1px solid var(--accent-light)', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
+                        <h3 style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: 0, fontSize: isMobile ? '1.1rem' : '1.3rem', marginBottom: '1.5rem' }}>
+                            <Layout size={22} color="#3b82f6" /> Navegación
                         </h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                             {stats.topPages.map((p, i) => (
-                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                    <span style={{ fontWeight: 500 }}>{p.path}</span>
-                                    <span style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', padding: '4px 12px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 700 }}>{p.pctActions}%</span>
+                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: isMobile ? '10px' : '14px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                    <span style={{ fontWeight: 500, fontSize: isMobile ? '0.85rem' : '1rem' }}>{p.path}</span>
+                                    <span style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', padding: '4px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 700 }}>{p.pctActions}%</span>
                                 </div>
                             ))}
                         </div>
                     </div>
-                    <div style={{ background: 'var(--bg-card)', padding: '2rem', borderRadius: '24px', border: '1px solid var(--accent-light)', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
-                        <h3 style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: 0, fontSize: '1.3rem', marginBottom: '1.5rem' }}>
-                            <MousePointer size={22} color="#f59e0b" /> Interacciones (Clicks)
+                    <div style={{ background: 'var(--bg-card)', padding: isMobile ? '1.25rem' : '2rem', borderRadius: '24px', border: '1px solid var(--accent-light)', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
+                        <h3 style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: 0, fontSize: isMobile ? '1.1rem' : '1.3rem', marginBottom: '1.5rem' }}>
+                            <MousePointer size={22} color="#f59e0b" /> Clicks
                         </h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                             {stats.topElements.map((e, i) => (
-                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                    <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>{e.label}</span>
-                                    <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24', padding: '4px 12px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 700 }}>{e.pctActions}%</span>
+                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: isMobile ? '10px' : '14px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                    <span style={{ fontSize: isMobile ? '0.8rem' : '0.9rem', fontWeight: 500 }}>{e.label}</span>
+                                    <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24', padding: '4px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 700 }}>{e.pctActions}%</span>
                                 </div>
                             ))}
                         </div>
@@ -398,34 +431,34 @@ export default function DeveloperPage() {
             )}
 
             {viewMode === 'HEATMAP' && (
-                <div style={{ background: 'var(--bg-card)', padding: '2rem', borderRadius: '24px', border: '1px solid var(--accent-light)' }}>
-                    <div style={{ display: 'flex', gap: '12px', marginBottom: '2rem', flexWrap: 'wrap' }}>
+                <div style={{ background: 'var(--bg-card)', padding: isMobile ? '1rem' : '2rem', borderRadius: '24px', border: '1px solid var(--accent-light)' }}>
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
                         {stats.topPages.map(p => (
                             <button
                                 key={p.path}
                                 onClick={() => setSelectedPath(p.path)}
                                 style={{
-                                    padding: '8px 16px',
-                                    borderRadius: '12px',
+                                    padding: '6px 12px',
+                                    borderRadius: '10px',
                                     background: selectedPath === p.path ? 'var(--text-primary)' : 'rgba(255,255,255,0.05)',
                                     color: selectedPath === p.path ? 'var(--bg-card)' : 'var(--text-primary)',
                                     border: '1px solid var(--accent-light)',
                                     cursor: 'pointer',
                                     fontWeight: 600,
-                                    fontSize: '0.9rem'
+                                    fontSize: '0.8rem'
                                 }}
                             >
                                 {p.path}
                             </button>
                         ))}
                     </div>
-                    <div style={{ position: 'relative', width: '100%', height: '600px', background: 'rgba(0,0,0,0.3)', borderRadius: '20px', overflow: 'hidden', border: '1px solid var(--accent-light)' }}>
+                    <div style={{ position: 'relative', width: '100%', height: isMobile ? '400px' : '600px', background: 'rgba(0,0,0,0.3)', borderRadius: '20px', overflow: 'hidden', border: '1px solid var(--accent-light)' }}>
                         {heatmapPoints.map((pt, i) => (
                             <div key={i} style={{
                                 position: 'absolute',
                                 left: `${(pt.x / (pt.viewport_w || 1)) * 100}%`,
                                 top: `${(pt.y / (pt.viewport_h || 1)) * 100}%`,
-                                width: '20px', height: '20px',
+                                width: isMobile ? '12px' : '20px', height: isMobile ? '12px' : '20px',
                                 background: 'radial-gradient(circle, #ff4444 0%, rgba(255, 68, 68, 0) 70%)',
                                 opacity: 0.6,
                                 borderRadius: '50%',
@@ -438,87 +471,63 @@ export default function DeveloperPage() {
             )}
 
             {viewMode === 'LICENSE' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? '1.5rem' : '2.5rem' }}>
                     <div style={{
                         background: 'linear-gradient(90deg, var(--bg-card) 0%, rgba(255,255,255,0.03) 100%)',
-                        padding: '2.5rem',
+                        padding: isMobile ? '1.5rem' : '2.5rem',
                         borderRadius: '24px',
                         display: 'flex',
+                        flexDirection: isMobile ? 'column' : 'row',
                         justifyContent: 'space-between',
-                        alignItems: 'center',
+                        alignItems: isMobile ? 'stretch' : 'center',
+                        gap: isMobile ? '1.5rem' : '2rem',
                         border: '1px solid var(--accent-light)',
                         boxShadow: '0 10px 30px rgba(0,0,0,0.3)'
                     }}>
                         <div>
-                            <h2 style={{ margin: 0, fontSize: '1.8rem', fontWeight: 800 }}>Generar Licencia</h2>
-                            <p style={{ margin: '8px 0 0', color: 'var(--text-secondary)', fontSize: '1.1rem' }}>Formato Estándar: KAV-XXXX-XXXX-XXXX</p>
+                            <h2 style={{ margin: 0, fontSize: isMobile ? '1.4rem' : '1.8rem', fontWeight: 800 }}>Generar Licencia</h2>
+                            {!isMobile && <p style={{ margin: '8px 0 0', color: 'var(--text-secondary)', fontSize: '1.1rem' }}>Formato Estándar: KAV-XXXX-XXXX-XXXX</p>}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+                        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center', gap: isMobile ? '1.25rem' : '2rem' }}>
                             <div style={{
                                 display: 'flex',
                                 background: 'var(--accent-light)',
-                                padding: '6px',
+                                padding: '4px',
                                 borderRadius: '16px',
                                 border: '1px solid var(--accent-light)',
                                 boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)'
                             }}>
-                                <button
-                                    onClick={() => setGenPlan('free')}
-                                    style={{
-                                        padding: '10px 20px',
-                                        borderRadius: '12px',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                        background: genPlan === 'free' ? '#00ff88' : 'transparent',
-                                        color: genPlan === 'free' ? '#000' : 'var(--text-primary)',
-                                        opacity: genPlan === 'free' ? 1 : 0.6,
-                                        fontWeight: 800,
-                                        transition: 'all 0.3s ease',
-                                        fontSize: '0.85rem'
-                                    }}
-                                >
-                                    FREE
-                                </button>
-                                <button
-                                    onClick={() => setGenPlan('monthly')}
-                                    style={{
-                                        padding: '10px 20px',
-                                        borderRadius: '12px',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                        background: genPlan === 'monthly' ? '#00ff88' : 'transparent',
-                                        color: genPlan === 'monthly' ? '#000' : 'var(--text-primary)',
-                                        opacity: genPlan === 'monthly' ? 1 : 0.6,
-                                        fontWeight: 800,
-                                        transition: 'all 0.3s ease',
-                                        fontSize: '0.85rem'
-                                    }}
-                                >
-                                    30 DÍAS
-                                </button>
-                                <button
-                                    onClick={() => setGenPlan('yearly')}
-                                    style={{
-                                        padding: '10px 20px',
-                                        borderRadius: '12px',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                        background: genPlan === 'yearly' ? '#00ff88' : 'transparent',
-                                        color: genPlan === 'yearly' ? '#000' : 'var(--text-primary)',
-                                        opacity: genPlan === 'yearly' ? 1 : 0.6,
-                                        fontWeight: 800,
-                                        transition: 'all 0.3s ease',
-                                        fontSize: '0.85rem'
-                                    }}
-                                >
-                                    1 AÑO
-                                </button>
+                                {[
+                                    { id: 'free', label: 'FREE' },
+                                    { id: 'monthly', label: '30 DÍAS' },
+                                    { id: 'yearly', label: '1 AÑO' }
+                                ].map(p => (
+                                    <button
+                                        key={p.id}
+                                        onClick={() => setGenPlan(p.id)}
+                                        style={{
+                                            flex: 1,
+                                            padding: isMobile ? '10px 12px' : '10px 20px',
+                                            borderRadius: '12px',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            background: genPlan === p.id ? '#00ff88' : 'transparent',
+                                            color: genPlan === p.id ? '#000' : 'var(--text-primary)',
+                                            opacity: genPlan === p.id ? 1 : 0.6,
+                                            fontWeight: 800,
+                                            transition: 'all 0.3s ease',
+                                            fontSize: isMobile ? '0.75rem' : '0.85rem'
+                                        }}
+                                    >
+                                        {p.label}
+                                    </button>
+                                ))}
                             </div>
                             <button
                                 onClick={handleGenerateClick}
                                 disabled={isGenerating}
                                 style={{
-                                    padding: '16px 32px',
+                                    padding: isMobile ? '14px' : '16px 32px',
                                     background: 'linear-gradient(135deg, #00ff88 0%, #00bd68 100%)',
                                     color: '#000',
                                     border: 'none',
@@ -528,185 +537,231 @@ export default function DeveloperPage() {
                                     display: 'flex',
                                     gap: '12px',
                                     alignItems: 'center',
+                                    justifyContent: 'center',
                                     fontSize: '1rem',
                                     boxShadow: '0 10px 25px rgba(0, 255, 136, 0.3)',
                                     textTransform: 'uppercase',
                                     letterSpacing: '1px'
                                 }}
                             >
-                                <Plus size={22} strokeWidth={3} /> {isGenerating ? 'Generando...' : 'Generar Key'}
+                                <Plus size={22} strokeWidth={3} /> {isGenerating ? '...' : (isMobile ? 'Generar' : 'Generar Key')}
                             </button>
                         </div>
                     </div>
 
-                    <div style={{ background: 'var(--bg-card)', borderRadius: '24px', border: '1px solid var(--accent-light)', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                            <thead style={{ background: 'rgba(255,255,255,0.03)' }}>
-                                <tr>
-                                    <th style={{ textAlign: 'left', padding: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Licencia</th>
-                                    <th style={{ textAlign: 'left', padding: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Configuración</th>
-                                    <th style={{ textAlign: 'left', padding: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Organización</th>
-                                    <th style={{ textAlign: 'left', padding: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Vencimiento</th>
-                                    <th style={{ textAlign: 'right', padding: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {generatedKeys.map(k => {
-                                    const daysLeft = getDaysRemaining(k.organizations?.license_expires_at);
-                                    const isExp = isExpired(k.organizations?.license_expires_at);
-                                    const isSoon = isExpiringSoon(k.organizations?.license_expires_at);
+                    {!isMobile ? (
+                        <div style={{ background: 'var(--bg-card)', borderRadius: '24px', border: '1px solid var(--accent-light)', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <thead style={{ background: 'rgba(255,255,255,0.03)' }}>
+                                    <tr>
+                                        <th style={{ textAlign: 'left', padding: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Licencia</th>
+                                        <th style={{ textAlign: 'left', padding: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Estado</th>
+                                        <th style={{ textAlign: 'left', padding: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Cliente</th>
+                                        <th style={{ textAlign: 'left', padding: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Vencimiento</th>
+                                        <th style={{ textAlign: 'right', padding: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {generatedKeys.map(k => {
+                                        const daysLeft = getDaysRemaining(k.organizations?.license_expires_at);
+                                        const isExp = isExpired(k.organizations?.license_expires_at);
+                                        const isSoon = isExpiringSoon(k.organizations?.license_expires_at);
 
-                                    return (
-                                        <tr key={k.id} style={{ borderTop: '1px solid var(--accent-light)', transition: 'background 0.2s' }}>
-                                            <td style={{ padding: '1.5rem' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                                    <code style={{ background: 'rgba(0, 255, 136, 0.1)', padding: '8px 16px', borderRadius: '10px', fontSize: '1.1rem', color: '#00ff88', fontWeight: 800, letterSpacing: '2px', border: '1px solid rgba(0, 255, 136, 0.2)' }}>{k.key}</code>
-                                                    <button
-                                                        onClick={() => handleCopy(k.id, k.key)}
-                                                        style={{
-                                                            padding: '10px',
-                                                            borderRadius: '10px',
-                                                            border: `1px solid ${copiedId === k.id ? '#00ff88' : 'rgba(255,255,255,0.1)'}`,
-                                                            background: copiedId === k.id ? 'rgba(0, 255, 136, 0.1)' : 'rgba(255,255,255,0.05)',
-                                                            cursor: 'pointer',
-                                                            color: copiedId === k.id ? '#00ff88' : 'var(--text-primary)',
-                                                            transition: 'all 0.2s',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            gap: '8px'
-                                                        }}
-                                                        title="Copiar al portapapeles"
-                                                    >
-                                                        {copiedId === k.id ? (
-                                                            <>
-                                                                <Shield size={16} />
-                                                                <span style={{ fontSize: '0.75rem', fontWeight: 800 }}>¡COPIADO!</span>
-                                                            </>
-                                                        ) : <Copy size={16} />}
-                                                    </button>
-                                                </div>
-                                            </td>
-                                            <td style={{ padding: '1.5rem' }}>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                    <span style={{
-                                                        fontSize: '0.8rem',
-                                                        padding: '4px 12px',
-                                                        borderRadius: '20px',
-                                                        background: k.status === 'available' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                                                        color: k.status === 'available' ? '#10b981' : '#f87171',
-                                                        width: 'fit-content',
-                                                        fontWeight: 800,
-                                                        textTransform: 'uppercase'
-                                                    }}>
-                                                        {k.status === 'available' ? 'Disponible' : 'En Uso'}
-                                                    </span>
-                                                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: k.plan_type === 'yearly' ? '#3b82f6' : (k.plan_type === 'free' ? '#94a3b8' : '#f97316') }}></div>
-                                                        Plazo: {k.plan_type === 'yearly' ? 'ANUAL' : (k.plan_type === 'free' ? 'Prueba Gratuita' : '30 Días')}
-                                                    </span>
-                                                    {k.status !== 'available' && k.used_at && (
-                                                        <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 500, fontStyle: 'italic' }}>
-                                                            Activada: {formatDate(k.used_at)}
+                                        return (
+                                            <tr key={k.id} style={{ borderTop: '1px solid var(--accent-light)', transition: 'background 0.2s' }}>
+                                                <td style={{ padding: '1.5rem' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                        <code style={{ background: 'rgba(0, 255, 136, 0.1)', padding: '8px 16px', borderRadius: '10px', fontSize: '1.1rem', color: '#00ff88', fontWeight: 800, letterSpacing: '2px', border: '1px solid rgba(0, 255, 136, 0.2)' }}>{k.key}</code>
+                                                        <button onClick={() => handleCopy(k.id, k.key)} style={{ padding: '10px', borderRadius: '10px', border: `1px solid ${copiedId === k.id ? '#00ff88' : 'rgba(255,255,255,0.1)'}`, background: copiedId === k.id ? 'rgba(0, 255, 136, 0.1)' : 'rgba(255,255,255,0.05)', cursor: 'pointer', color: copiedId === k.id ? '#00ff88' : 'var(--text-primary)', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            {copiedId === k.id ? <><Shield size={16} /><span style={{ fontSize: '0.75rem', fontWeight: 800 }}>¡OK!</span></> : <Copy size={16} />}
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '1.5rem' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                        <span style={{ fontSize: '0.8rem', padding: '4px 12px', borderRadius: '20px', background: k.status === 'available' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)', color: k.status === 'available' ? '#10b981' : '#f87171', width: 'fit-content', fontWeight: 800, textTransform: 'uppercase' }}>
+                                                            {k.status === 'available' ? 'Disponible' : 'En Uso'}
                                                         </span>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td style={{ padding: '1.5rem' }}>
-                                                {k.organizations?.name ? (
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: k.plan_type === 'yearly' ? '#3b82f6' : (k.plan_type === 'free' ? '#94a3b8' : '#f97316') }}></div>
+                                                            {k.plan_type === 'yearly' ? 'ANUAL' : (k.plan_type === 'free' ? 'PRUEBA' : '30 DÍAS')}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '1.5rem' }}>
+                                                    {k.organizations?.name ? (
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                            <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold', fontSize: '0.8rem' }}>
-                                                                {k.organizations.name.charAt(0)}
-                                                            </div>
+                                                            <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold' }}>{k.organizations.name.charAt(0)}</div>
                                                             <span style={{ fontWeight: 600 }}>{k.organizations.name}</span>
                                                         </div>
-                                                        {k.organizations.license_expires_at && (
-                                                            <div style={{
-                                                                fontSize: '0.75rem',
-                                                                color: isExpired(k.organizations.license_expires_at) ? '#f87171' : (isExpiringSoon(k.organizations.license_expires_at) ? '#fbbf24' : 'var(--text-secondary)'),
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                gap: '4px',
-                                                                fontWeight: (isExpired(k.organizations.license_expires_at) || isExpiringSoon(k.organizations.license_expires_at)) ? 'bold' : 'normal'
-                                                            }}>
-                                                                {isExpired(k.organizations.license_expires_at) ? '❌ Expirado: ' : (isExpiringSoon(k.organizations.license_expires_at) ? '⚠️ Próximo a vencer: ' : 'Vence: ')}
-                                                                {formatDate(k.organizations.license_expires_at)}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ) : (
-                                                    <span style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>Sin asignar</span>
-                                                )}
-                                            </td>
-                                            <td style={{ padding: '1.5rem' }}>
-                                                {k.organizations?.license_expires_at ? (
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                        <span style={{ fontWeight: 700, fontSize: '0.9rem', color: isExp ? '#f87171' : (isSoon ? '#fbbf24' : 'var(--text-primary)') }}>
-                                                            {formatDate(k.organizations.license_expires_at)}
-                                                        </span>
-                                                        <span style={{
-                                                            fontSize: '0.75rem',
-                                                            fontWeight: 800,
-                                                            color: isExp ? '#f87171' : (isSoon ? '#fbbf24' : '#10b981'),
-                                                            background: isExp ? 'rgba(239, 68, 68, 0.1)' : (isSoon ? 'rgba(251, 191, 36, 0.1)' : 'rgba(16, 185, 129, 0.1)'),
-                                                            padding: '2px 8px',
-                                                            borderRadius: '6px',
-                                                            width: 'fit-content'
-                                                        }}>
-                                                            {isExp ? 'EXPIRADA' : `${daysLeft} DÍAS RESTANTES`}
-                                                        </span>
-                                                    </div>
-                                                ) : (
-                                                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>-</span>
-                                                )}
-                                            </td>
-                                            <td style={{ padding: '1.5rem', textAlign: 'right' }}>
-                                                <button
-                                                    onClick={() => deleteKey(k.id)}
-                                                    style={{
-                                                        color: '#f87171',
-                                                        background: 'rgba(239, 68, 68, 0.1)',
-                                                        border: '1px solid rgba(239, 68, 68, 0.2)',
-                                                        cursor: 'pointer',
-                                                        padding: '10px',
-                                                        borderRadius: '10px',
-                                                        transition: 'all 0.2s'
-                                                    }}
-                                                >
-                                                    <Trash2 size={18} />
+                                                    ) : <span style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>Libre</span>}
+                                                </td>
+                                                <td style={{ padding: '1.5rem' }}>
+                                                    {k.organizations?.license_expires_at ? (
+                                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                            <span style={{ fontWeight: 700, fontSize: '0.9rem', color: isExp ? '#f87171' : (isSoon ? '#fbbf24' : 'var(--text-primary)') }}>{formatDate(k.organizations.license_expires_at)}</span>
+                                                            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: isExp ? '#f87171' : (isSoon ? '#fbbf24' : '#10b981') }}>{isExp ? 'EXPIRADA' : `${daysLeft}d restantes`}</span>
+                                                        </div>
+                                                    ) : '-'}
+                                                </td>
+                                                <td style={{ padding: '1.5rem', textAlign: 'right' }}>
+                                                    <button onClick={() => deleteKey(k.id)} style={{ color: '#f87171', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', cursor: 'pointer', padding: '10px', borderRadius: '10px' }}>
+                                                        <Trash2 size={18} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {generatedKeys.map(k => {
+                                const daysLeft = getDaysRemaining(k.organizations?.license_expires_at);
+                                const isExp = isExpired(k.organizations?.license_expires_at);
+                                const isSoon = isExpiringSoon(k.organizations?.license_expires_at);
+
+                                return (
+                                    <div key={k.id} style={{ background: 'var(--bg-card)', padding: '1.25rem', borderRadius: '20px', border: '1px solid var(--accent-light)' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                            <code style={{ background: 'rgba(0, 255, 136, 0.1)', padding: '4px 8px', borderRadius: '8px', fontSize: '0.95rem', color: '#00ff88', fontWeight: 800, letterSpacing: '1px' }}>{k.key}</code>
+                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                                <button onClick={() => handleCopy(k.id, k.key)} style={{ padding: '8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', background: copiedId === k.id ? 'rgba(0, 255, 136, 0.2)' : 'rgba(255,255,255,0.05)', color: copiedId === k.id ? '#00ff88' : 'white' }}>
+                                                    {copiedId === k.id ? <CheckCircle2 size={16} /> : <Copy size={16} />}
                                                 </button>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+                                                <button onClick={() => deleteKey(k.id)} style={{ padding: '8px', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.2)', background: 'rgba(239, 68, 68, 0.1)', color: '#f87171' }}>
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                            <div>
+                                                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '4px' }}>Estado</div>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: k.status === 'available' ? '#10b981' : '#f87171' }}>{k.status === 'available' ? 'DISPONIBLE' : 'EN USO'}</span>
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '4px' }}>Plan</div>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 700 }}>{k.plan_type === 'yearly' ? 'ANUAL' : (k.plan_type === 'free' ? 'PRUEBA' : '30 DÍAS')}</span>
+                                            </div>
+                                            {k.organizations?.name && (
+                                                <div style={{ gridColumn: 'span 2' }}>
+                                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '4px' }}>Organización</div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <div style={{ width: '20px', height: '20px', borderRadius: '4px', background: '#3b82f6', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 'bold' }}>{k.organizations.name.charAt(0)}</div>
+                                                        <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{k.organizations.name}</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {k.organizations?.license_expires_at && (
+                                                <div style={{ gridColumn: 'span 2' }}>
+                                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '4px' }}>Vencimiento</div>
+                                                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: isExp ? '#f87171' : (isSoon ? '#fbbf24' : '#10b981') }}>
+                                                        {formatDate(k.organizations.license_expires_at)} ({isExp ? 'EXPIRADA' : `${daysLeft}d restantes`})
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {viewMode === 'TOOLS' && (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px', padding: isMobile ? '10px' : '20px' }}>
+                    <div style={{
+                        background: 'rgba(15, 23, 42, 0.9)',
+                        backdropFilter: 'blur(12px)',
+                        padding: isMobile ? '1.5rem' : '2.5rem',
+                        borderRadius: '32px',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '1.5rem',
+                        width: '100%',
+                        maxWidth: '420px'
+                    }}>
+                        <h4 style={{ margin: 0, color: '#f97316', fontSize: '1.1rem', fontWeight: 800, textAlign: 'center', letterSpacing: '1px' }}>
+                            DEVs TOOLS
+                        </h4>
+
+                        <button
+                            onClick={generateFakeData}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '12px',
+                                background: '#ea580c',
+                                color: 'white',
+                                border: 'none',
+                                padding: '18px',
+                                borderRadius: '16px',
+                                cursor: 'pointer',
+                                fontSize: '1rem',
+                                fontWeight: 800,
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            <RefreshCw size={20} />
+                            Generar Data (1 Mes)
+                        </button>
+
+                        <button
+                            onClick={clearAllData}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '12px',
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                color: '#ef4444',
+                                border: '1px solid rgba(239, 68, 68, 0.2)',
+                                padding: '18px',
+                                borderRadius: '16px',
+                                cursor: 'pointer',
+                                fontSize: '1rem',
+                                fontWeight: 800,
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            <Trash2 size={20} />
+                            Resetear Todo
+                        </button>
+
+                        <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', textAlign: 'center', margin: 0, fontWeight: 500 }}>
+                            * Genera 280+ ventas y 20+ reportes
+                        </p>
                     </div>
                 </div>
             )}
 
             {/* Modal de Enrolamiento 2FA */}
             {showMfaEnroll && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-                    <div style={{ background: '#1a1a1a', borderRadius: '32px', border: '1px solid #333', width: '95%', maxWidth: '450px', padding: 'min(2.5rem, 6vw)', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', overflowX: 'hidden' }}>
-                        <button onClick={() => setShowMfaEnroll(false)} style={{ position: 'absolute', top: '24px', right: '24px', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={24} /></button>
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: isMobile ? '10px' : '20px' }}>
+                    <div style={{ background: '#1a1a1a', borderRadius: '32px', border: '1px solid #333', width: '100%', maxWidth: '450px', padding: isMobile ? '1.5rem' : '2.5rem', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', overflowX: 'hidden', maxHeight: '95vh', overflowY: 'auto' }}>
+                        <button onClick={() => setShowMfaEnroll(false)} style={{ position: 'absolute', top: isMobile ? '15px' : '24px', right: isMobile ? '15px' : '24px', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={24} /></button>
 
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ width: '64px', height: '64px', borderRadius: '20px', background: 'rgba(0, 255, 136, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#00ff88', margin: '0 auto 1.5rem' }}>
-                                <Lock size={32} />
+                            <div style={{ width: isMobile ? '48px' : '64px', height: isMobile ? '48px' : '64px', borderRadius: '16px', background: 'rgba(0, 255, 136, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#00ff88', margin: '0 auto 1.5rem' }}>
+                                <Lock size={isMobile ? 24 : 32} />
                             </div>
-                            <h2 style={{ fontSize: '1.75rem', fontWeight: 800, marginBottom: '0.75rem', color: 'white' }}>Seguridad Requerida</h2>
-                            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginBottom: '2rem', lineHeight: '1.6' }}>Copia este serial e ingrésalo en tu app de <b>Google Authenticator</b>.</p>
+                            <h2 style={{ fontSize: isMobile ? '1.5rem' : '1.75rem', fontWeight: 800, marginBottom: '0.75rem', color: 'white' }}>Seguridad Requerida</h2>
+                            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '2rem', lineHeight: '1.6' }}>Vincula tu app de <b>Google Authenticator</b> usando el código debajo:</p>
 
-                            <div style={{ marginBottom: '2.5rem', background: 'rgba(255,255,255,0.03)', padding: '1.5rem', borderRadius: '20px', border: '1px solid #333' }}>
-                                <p style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 800, marginBottom: '12px' }}>Serial de Configuración (Cereal):</p>
+                            <div style={{ marginBottom: isMobile ? '1.5rem' : '2.5rem', background: 'rgba(255,255,255,0.03)', padding: isMobile ? '1rem' : '1.5rem', borderRadius: '16px', border: '1px solid #333' }}>
+                                <p style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 800, marginBottom: '12px' }}>Código de Configuración (Secret):</p>
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                                     <code style={{
                                         background: 'rgba(0, 255, 136, 0.1)',
                                         padding: '12px',
                                         borderRadius: '12px',
                                         color: '#00ff88',
-                                        fontSize: 'min(1.2rem, 4vw)',
+                                        fontSize: isMobile ? '0.9rem' : '1.1rem',
                                         fontWeight: 800,
                                         letterSpacing: '1px',
                                         border: '1px solid rgba(0, 255, 136, 0.2)',
@@ -717,10 +772,7 @@ export default function DeveloperPage() {
                                         {mfaData?.totp?.secret || '--------'}
                                     </code>
                                     <button
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(mfaData?.totp?.secret);
-                                            alert("¡Serial Copiado!");
-                                        }}
+                                        onClick={() => handleCopy('mfa-secret', mfaData?.totp?.secret)}
                                         style={{
                                             background: 'rgba(0, 255, 136, 0.1)',
                                             border: '1px solid #00ff88',
@@ -729,7 +781,7 @@ export default function DeveloperPage() {
                                             borderRadius: '12px',
                                             cursor: 'pointer',
                                             fontWeight: 800,
-                                            fontSize: '0.8rem',
+                                            fontSize: '0.75rem',
                                             width: '100%',
                                             display: 'flex',
                                             alignItems: 'center',
@@ -737,7 +789,8 @@ export default function DeveloperPage() {
                                             gap: '8px'
                                         }}
                                     >
-                                        <Copy size={16} /> COPIAR SERIAL
+                                        {copiedId === 'mfa-secret' ? <CheckCircle2 size={16} /> : <Copy size={16} />}
+                                        {copiedId === 'mfa-secret' ? '¡COPIADO!' : 'COPIAR CÓDIGO'}
                                     </button>
                                 </div>
                             </div>
@@ -750,7 +803,7 @@ export default function DeveloperPage() {
                                     maxLength={6}
                                     value={mfaCode}
                                     onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
-                                    style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid #333', borderRadius: '14px', padding: '16px', color: 'white', fontSize: '1.5rem', textAlign: 'center', letterSpacing: '8px', fontWeight: 'bold' }}
+                                    style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid #333', borderRadius: '14px', padding: isMobile ? '12px' : '16px', color: 'white', fontSize: isMobile ? '1.25rem' : '1.5rem', textAlign: 'center', letterSpacing: isMobile ? '4px' : '8px', fontWeight: 'bold' }}
                                 />
                                 {mfaError && <p style={{ color: '#f87171', fontSize: '0.85rem', marginTop: '8px', textAlign: 'center', fontWeight: 'bold' }}>{mfaError}</p>}
                             </div>
@@ -781,18 +834,18 @@ export default function DeveloperPage() {
 
             {/* Modal de Verificación 2FA para Generar */}
             {showMfaVerify && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-                    <div style={{ background: '#1a1a1a', borderRadius: '32px', border: '1px solid #333', width: '100%', maxWidth: '400px', padding: '2.5rem', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
-                        <button onClick={() => setShowMfaVerify(false)} style={{ position: 'absolute', top: '24px', right: '24px', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={24} /></button>
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: isMobile ? '10px' : '20px' }}>
+                    <div style={{ background: '#1a1a1a', borderRadius: '32px', border: '1px solid #333', width: '100%', maxWidth: '400px', padding: isMobile ? '1.5rem' : '2.5rem', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+                        <button onClick={() => setShowMfaVerify(false)} style={{ position: 'absolute', top: isMobile ? '15px' : '20px', right: isMobile ? '15px' : '20px', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={24} /></button>
 
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ width: '64px', height: '64px', borderRadius: '20px', background: 'rgba(0, 255, 136, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#00ff88', margin: '0 auto 1.5rem' }}>
-                                <Shield size={32} />
+                            <div style={{ width: isMobile ? '48px' : '64px', height: isMobile ? '48px' : '64px', borderRadius: '16px', background: 'rgba(0, 255, 136, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#00ff88', margin: '0 auto 1.25rem' }}>
+                                <Shield size={isMobile ? 24 : 32} />
                             </div>
-                            <h2 style={{ fontSize: '1.75rem', fontWeight: 800, marginBottom: '0.75rem', color: 'white' }}>Seguridad Requerida</h2>
-                            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginBottom: '2rem' }}>Ingresa el código de <b>Google Authenticator</b> para autorizar la generación de la licencia.</p>
+                            <h2 style={{ fontSize: isMobile ? '1.5rem' : '1.75rem', fontWeight: 800, marginBottom: '0.75rem', color: 'white' }}>Seguridad</h2>
+                            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Ingresa el código de <b>Google Authenticator</b>.</p>
 
-                            <div style={{ textAlign: 'left', marginBottom: '2rem' }}>
+                            <div style={{ textAlign: 'left', marginBottom: '1.5rem' }}>
                                 <input
                                     autoFocus
                                     type="text"
@@ -800,7 +853,7 @@ export default function DeveloperPage() {
                                     maxLength={6}
                                     value={mfaCode}
                                     onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
-                                    style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid #333', borderRadius: '18px', padding: '20px', color: 'white', fontSize: '2rem', textAlign: 'center', letterSpacing: '8px', fontWeight: 'bold' }}
+                                    style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid #333', borderRadius: '18px', padding: isMobile ? '14px' : '20px', color: 'white', fontSize: isMobile ? '1.5rem' : '2rem', textAlign: 'center', letterSpacing: isMobile ? '4px' : '8px', fontWeight: 'bold' }}
                                 />
                                 {mfaError && <p style={{ color: '#f87171', fontSize: '0.85rem', marginTop: '12px', textAlign: 'center', fontWeight: 'bold' }}>{mfaError}</p>}
                             </div>
@@ -810,7 +863,7 @@ export default function DeveloperPage() {
                                 disabled={mfaCode.length !== 6 || isVerifying}
                                 style={{
                                     width: '100%',
-                                    padding: '20px',
+                                    padding: isMobile ? '16px' : '20px',
                                     background: '#00ff88',
                                     color: 'black',
                                     border: 'none',
@@ -823,7 +876,7 @@ export default function DeveloperPage() {
                                     boxShadow: '0 10px 25px rgba(0, 255, 136, 0.3)'
                                 }}
                             >
-                                {isVerifying ? 'Verificando...' : 'Autorizar y Generar'}
+                                {isVerifying ? 'Verificando...' : 'Autorizar'}
                             </button>
                         </div>
                     </div>
@@ -832,17 +885,17 @@ export default function DeveloperPage() {
 
             {/* Modal de Introducción 2FA (Estético) */}
             {showMfaIntro && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-                    <div style={{ background: '#1a1a1a', borderRadius: '32px', border: '1px solid #333', width: '100%', maxWidth: '420px', padding: '2.5rem', textAlign: 'center', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
-                        <div style={{ width: '64px', height: '64px', borderRadius: '20px', background: 'rgba(0, 255, 136, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#00ff88', margin: '0 auto 1.5rem' }}>
-                            <Shield size={32} />
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: isMobile ? '10px' : '20px' }}>
+                    <div style={{ background: '#1a1a1a', borderRadius: '32px', border: '1px solid #333', width: '100%', maxWidth: '420px', padding: isMobile ? '1.5rem' : '2.5rem', textAlign: 'center', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+                        <div style={{ width: isMobile ? '48px' : '64px', height: isMobile ? '48px' : '64px', borderRadius: '16px', background: 'rgba(0, 255, 136, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#00ff88', margin: '0 auto 1.25rem' }}>
+                            <Shield size={isMobile ? 24 : 32} />
                         </div>
-                        <h2 style={{ fontSize: '1.75rem', fontWeight: 800, marginBottom: '1rem', color: 'white' }}>Seguridad de Nivel 2</h2>
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: '1.6', marginBottom: '2.5rem' }}>
-                            Para generar claves de licencia, es necesario vincular tu cuenta con <b>Google Authenticator</b>. Esto protege el sistema contra accesos no autorizados.
+                        <h2 style={{ fontSize: isMobile ? '1.5rem' : '1.75rem', fontWeight: 800, marginBottom: '1rem', color: 'white' }}>Nivel de Seguridad II</h2>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.6', marginBottom: isMobile ? '1.5rem' : '2.5rem' }}>
+                            Vincula tu cuenta con <b>Google Authenticator</b> para proteger la generación de claves.
                         </p>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                             <button
                                 onClick={() => {
                                     setShowMfaIntro(false);
@@ -850,7 +903,7 @@ export default function DeveloperPage() {
                                 }}
                                 style={{
                                     width: '100%',
-                                    padding: '18px',
+                                    padding: isMobile ? '16px' : '18px',
                                     background: '#00ff88',
                                     color: 'black',
                                     border: 'none',
@@ -868,7 +921,7 @@ export default function DeveloperPage() {
                                 onClick={() => setShowMfaIntro(false)}
                                 style={{
                                     width: '100%',
-                                    padding: '18px',
+                                    padding: isMobile ? '16px' : '18px',
                                     background: 'rgba(255,255,255,0.05)',
                                     color: 'white',
                                     border: '1px solid #333',

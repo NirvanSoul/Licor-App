@@ -111,15 +111,20 @@ export default function MainLayout() {
                             <NavLink
                                 to="/ajustes?view=activation"
                                 style={{
-                                    display: 'inline-block',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '10px',
                                     padding: '12px 24px',
-                                    background: '#f97316',
+                                    background: '#10B981',
                                     color: 'white',
                                     borderRadius: '12px',
                                     textDecoration: 'none',
-                                    fontWeight: 600
+                                    fontWeight: 700,
+                                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
                                 }}
                             >
+                                <img src="/Whatsapp.svg" alt="WhatsApp" style={{ width: '20px', height: '20px' }} />
                                 Activar Ahora
                             </NavLink>
                         </div>

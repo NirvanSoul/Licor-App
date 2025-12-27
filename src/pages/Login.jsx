@@ -78,7 +78,7 @@ export default function Login() {
                             style={{ width: '100%', boxSizing: 'border-box' }}
                         />
                     </div>
-                    <div className="input-group-large" style={{ position: 'relative' }}>
+                    <div style={{ position: 'relative', width: '100%' }}>
                         <input
                             type={showPassword ? 'text' : 'password'}
                             placeholder="Contraseña"
@@ -86,14 +86,14 @@ export default function Login() {
                             onChange={(e) => setPassword(e.target.value)}
                             required
                             className="ticket-input-large"
-                            style={{ width: '100%', boxSizing: 'border-box', paddingRight: '40px' }}
+                            style={{ width: '100%', boxSizing: 'border-box', paddingRight: '48px' }}
                         />
                         <button
                             type="button"
                             onClick={() => setShowPassword(!showPassword)}
                             style={{
                                 position: 'absolute',
-                                right: '12px',
+                                right: '14px',
                                 top: '50%',
                                 transform: 'translateY(-50%)',
                                 background: 'none',
@@ -101,7 +101,8 @@ export default function Login() {
                                 cursor: 'pointer',
                                 color: 'var(--text-secondary)',
                                 display: 'flex',
-                                alignItems: 'center'
+                                alignItems: 'center',
+                                padding: '4px'
                             }}
                         >
                             {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}

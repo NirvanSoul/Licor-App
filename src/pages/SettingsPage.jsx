@@ -903,6 +903,13 @@ export default function SettingsPage() {
 
     const handleInvite = async (e) => {
         e.preventDefault();
+
+        // BLOQUEO DE SEGURIDAD: Solo con licencia activa
+        if (!isLicenseActive) {
+            showNotification("⚠️ ACCIÓN BLOQUEADA: Debes activar tu suscripción para gestionar empleados.", "error");
+            return;
+        }
+
         setInviteStatus('loading');
 
         try {
@@ -1026,8 +1033,73 @@ export default function SettingsPage() {
     const MainMenu = () => {
         const isInactive = isLicenseActive === false;
 
+        const SectionSeparator = ({ label }) => (
+            <div style={{ display: 'flex', alignItems: 'center', margin: '1.5rem 0 2.25rem 0', gap: '1rem' }}>
+                <div style={{
+                    flex: 1,
+                    height: '1px',
+                    background: theme === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)'
+                }}></div>
+                <span style={{
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    color: theme === 'dark' ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.4)',
+                    letterSpacing: '1px',
+                    textTransform: 'capitalize'
+                }}>{label}</span>
+                <div style={{
+                    flex: 1,
+                    height: '1px',
+                    background: theme === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)'
+                }}></div>
+            </div>
+        );
+
+        const MenuOption = ({ item }) => {
+            const isDisabled = isInactive && !['activation', 'users'].includes(item.id);
+            return (
+                <button
+                    key={item.id}
+                    className={`option-btn ${isDisabled ? 'disabled' : ''}`}
+                    onClick={() => !isDisabled && setCurrentView(item.id)}
+                    style={{
+                        height: 'auto',
+                        padding: '1rem 1.25rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        borderRadius: '20px',
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--accent-light)',
+                        opacity: isDisabled ? 0.5 : 1,
+                        cursor: isDisabled ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.25s ease',
+                        marginBottom: '0.75rem'
+                    }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <div style={{
+                            background: item.color,
+                            width: '40px', height: '40px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            borderRadius: '12px', flexShrink: 0,
+                            boxShadow: `0 4px 12px ${item.color}40`
+                        }}>
+                            <item.icon size={20} color="white" />
+                        </div>
+                        <span style={{
+                            fontSize: '1rem',
+                            fontWeight: 700,
+                            color: theme === 'light' ? '#1E1E1E' : 'var(--text-primary)'
+                        }}>{item.label}</span>
+                    </div>
+                    {!isDisabled && <ChevronRight size={18} color="#999" />}
+                </button>
+            );
+        };
+
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', marginTop: '0.5rem' }}>
                 {isInactive && (
                     <div style={{
                         background: 'rgba(234, 88, 12, 0.1)',
@@ -1042,71 +1114,93 @@ export default function SettingsPage() {
                         Para usar las funciones del menú Ajustes activa la licencia.
                     </div>
                 )}
-                {[
-                    { id: 'products', label: 'Gestion de Productos', icon: Package, color: '#4ade80' },
-                    { id: 'dashboard', label: 'Precios Actuales', icon: Star, color: '#3b82f6' },
-                    { id: 'inventory', label: 'Inventario', icon: Box, color: '#a3e635' },
-                    { id: 'bcv', label: 'Tasas', icon: CircleDollarSign, color: '#f97316' },
-                    { id: 'users', label: 'Usuarios', icon: Users, color: '#ef4444' },
-                    { id: 'app', label: 'Apariencia', icon: Sun, color: '#6366f1' },
-                    // Only show Activation for Leaders (Including Developer for testing/access)
-                    ...((role && ['master', 'owner', 'admin', 'manager', 'developer'].some(r => role.toLowerCase().includes(r))) ? [{ id: 'activation', label: 'Activación', icon: ShieldCheck, color: '#10b981' }] : [])
-                ].map(item => {
-                    const isDisabled = isInactive && !['activation', 'users', 'app'].includes(item.id);
-                    return (
-                        <button
-                            key={item.id}
-                            className={`option-btn ${isDisabled ? 'disabled' : ''}`}
-                            onClick={() => !isDisabled && setCurrentView(item.id)}
-                            style={{
-                                height: 'auto',
-                                padding: '1rem 1.5rem',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                borderRadius: '16px',
-                                background: 'var(--bg-card)',
-                                border: 'none',
-                                opacity: isDisabled ? 0.5 : 1,
-                                cursor: isDisabled ? 'not-allowed' : 'pointer'
-                            }}
-                        >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                <div style={{ background: item.color, width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '12px', flexShrink: 0, boxShadow: `0 4px 12px ${item.color}40` }}>
-                                    <item.icon size={20} color="white" />
-                                </div>
-                                <span style={{ fontSize: '1rem', fontWeight: 500, color: 'var(--text-primary)' }}>{item.label}</span>
-                            </div>
-                            {!isDisabled && <ChevronRight size={20} color="#999" />}
-                        </button>
-                    );
-                })}
 
-                {/* Logout Button */}
-                <button
-                    onClick={logout}
-                    style={{
-                        marginTop: '1rem',
-                        height: 'auto',
-                        padding: '1rem 1.5rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '1rem',
-                        borderRadius: '16px',
-                        background: 'rgba(239, 68, 68, 0.1)',
-                        border: '1px solid rgba(239, 68, 68, 0.2)',
-                        cursor: 'pointer',
-                        width: '100%',
-                        transition: 'all 0.2s ease'
-                    }}
-                    onMouseOver={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'}
-                    onMouseOut={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
-                >
-                    <div style={{ background: '#ef4444', width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '12px', flexShrink: 0, boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)' }}>
-                        <LogOut size={20} color="white" />
+                {/* --- GESTIÓN --- */}
+                <SectionSeparator label="Gestion" />
+                <MenuOption item={{ id: 'products', label: 'Gestion de Productos', icon: Package, color: '#4ade80' }} />
+                <MenuOption item={{ id: 'dashboard', label: 'Precios Actuales', icon: Star, color: '#3b82f6' }} />
+                <MenuOption item={{ id: 'inventory', label: 'Inventario', icon: Box, color: '#a3e635' }} />
+
+                {/* --- GENERAL --- */}
+                <SectionSeparator label="General" />
+                <MenuOption item={{ id: 'bcv', label: 'Tasas', icon: CircleDollarSign, color: '#f97316' }} />
+                <MenuOption item={{ id: 'users', label: 'Usuarios', icon: Users, color: '#ef4444' }} />
+                {(role && ['master', 'owner', 'admin', 'manager', 'developer'].some(r => role.toLowerCase().includes(r))) && (
+                    <MenuOption item={{ id: 'activation', label: 'Activacion', icon: ShieldCheck, color: '#10b981' }} />
+                )}
+
+                {/* --- APARIENCIA Y CIERRE (Acercados) --- */}
+                <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <div
+                        onClick={toggleTheme}
+                        style={{
+                            padding: '1rem 1.25rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            borderRadius: '20px',
+                            background: theme === 'dark' ? 'rgba(99, 102, 241, 0.15)' : 'rgba(99, 102, 241, 0.08)',
+                            border: theme === 'dark' ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid rgba(99, 102, 241, 0.2)',
+                            cursor: 'pointer',
+                            transition: 'all 0.3s ease',
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <div style={{
+                                background: '#6366f1',
+                                width: '40px', height: '40px',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                borderRadius: '12px', flexShrink: 0,
+                                boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)'
+                            }}>
+                                <Sun size={20} color="white" />
+                            </div>
+                            <span style={{ fontSize: '1rem', fontWeight: 700, color: '#6366f1' }}>Apariencia</span>
+                        </div>
+
+                        <div style={{
+                            width: '46px',
+                            height: '24px',
+                            background: theme === 'dark' ? '#6366f1' : '#d1d1d6',
+                            borderRadius: '20px',
+                            padding: '3px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            transition: 'background 0.3s',
+                            position: 'relative'
+                        }}>
+                            <div style={{
+                                width: '18px', height: '18px',
+                                background: 'white', borderRadius: '50%',
+                                transform: theme === 'dark' ? 'translateX(22px)' : 'translateX(0)',
+                                transition: 'all 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28)',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.15)'
+                            }} />
+                        </div>
                     </div>
-                    <span style={{ fontSize: '1rem', fontWeight: 600, color: '#ef4444' }}>Cerrar Sesión</span>
-                </button>
+
+                    <button
+                        onClick={logout}
+                        style={{
+                            height: 'auto',
+                            padding: '1rem 1.25rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '1rem',
+                            borderRadius: '20px',
+                            background: 'rgba(239, 68, 68, 0.08)',
+                            border: '1px solid rgba(239, 68, 68, 0.2)',
+                            cursor: 'pointer',
+                            width: '100%',
+                            transition: 'all 0.2s ease',
+                        }}
+                    >
+                        <div style={{ background: '#ef4444', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '12px', flexShrink: 0, boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)' }}>
+                            <LogOut size={20} color="white" />
+                        </div>
+                        <span style={{ fontSize: '1rem', fontWeight: 700, color: '#ef4444' }}>Cerrar Sesión</span>
+                    </button>
+                </div>
             </div>
         );
     };
@@ -1130,58 +1224,13 @@ export default function SettingsPage() {
                     {currentView === 'dashboard' && 'Precios Actuales'}
                     {currentView === 'users' && 'Usuarios'}
                     {currentView === 'inventory' && 'Inventario'}
-                    {currentView === 'app' && 'Apariencia'}
                     {currentView === 'activation' && 'Activación de Licencia'}
                 </h1>
             </div>
 
             {currentView === 'main' && <MainMenu />}
 
-            {currentView === 'app' && (
-                <div className="order-summary-card">
-                    <h3 className="modal-title" style={{ fontSize: '1.1rem', textAlign: 'left', marginBottom: '1rem' }}>Preferencias de Tema</h3>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 0' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                            <div style={{ background: theme === 'dark' ? '#333' : '#e0e0e0', padding: '0', borderRadius: '50%', width: '40px', height: '40px', minWidth: '40px', minHeight: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                {theme === 'dark' ? <Moon size={24} color="white" /> : <Sun size={24} color="#333" />}
-                            </div>
-                            <div>
-                                <h4 style={{ margin: 0, fontSize: '1rem' }}>Modo Oscuro</h4>
-                                <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                                    {theme === 'dark' ? 'Activado' : 'Desactivado'}
-                                </p>
-                            </div>
-                        </div>
 
-                        {/* Simple Toggle Switch */}
-                        <div
-                            onClick={toggleTheme}
-                            style={{
-                                width: '50px',
-                                height: '28px',
-                                background: theme === 'dark' ? '#34c759' : '#e5e5ea',
-                                borderRadius: '999px',
-                                position: 'relative',
-                                cursor: 'pointer',
-                                transition: 'background 0.3s ease'
-                            }}
-                        >
-                            <div style={{
-                                width: '24px',
-                                height: '24px',
-                                background: 'white',
-                                borderRadius: '50%',
-                                position: 'absolute',
-                                top: '2px',
-                                left: theme === 'dark' ? '24px' : '2px',
-                                transition: 'left 0.3s cubic-bezier(0.4, 0.0, 0.2, 1)',
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                            }} />
-                        </div>
-                    </div>
-
-                </div>
-            )}
 
             {currentView === 'bcv' && (
                 <div className="order-summary-card">
@@ -1520,9 +1569,14 @@ export default function SettingsPage() {
                             </div>
                             {/* Invite Logic */}
                             {(role === 'OWNER' || role === 'master' || !role) && (
-                                <div style={{ background: 'var(--bg-card-hover)', borderRadius: '16px', padding: '1.5rem', marginBottom: '2rem', textAlign: 'left' }}>
-                                    <h3 style={{ fontSize: '1rem', marginBottom: '1rem', fontWeight: 600 }}>Invitar Nuevo Usuario</h3>
-                                    <form onSubmit={handleInvite} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                <div style={{ background: 'var(--bg-card-hover)', borderRadius: '16px', padding: '1.5rem', marginBottom: '2rem', textAlign: 'left', opacity: isLicenseActive ? 1 : 0.7, border: isLicenseActive ? 'none' : '1px dashed #ef4444' }}>
+                                    <h3 style={{ fontSize: '1rem', marginBottom: isLicenseActive ? '1rem' : '0.5rem', fontWeight: 600 }}>Invitar Nuevo Usuario</h3>
+                                    {!isLicenseActive && (
+                                        <div style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '8px 12px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, marginBottom: '1.5rem', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                                            Requiere Suscripción Activa
+                                        </div>
+                                    )}
+                                    <form onSubmit={handleInvite} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', pointerEvents: isLicenseActive ? 'auto' : 'none' }}>
                                         <div>
                                             <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>Email</label>
                                             <input
@@ -1698,7 +1752,7 @@ export default function SettingsPage() {
                                                         boxShadow: '0 6px 20px rgba(16, 185, 129, 0.3)'
                                                     }}
                                                 >
-                                                    <MessageCircle size={22} fill="white" />
+                                                    <img src="/Whatsapp.svg" alt="WhatsApp" style={{ width: '22px', height: '22px' }} />
                                                     Solicitar Prueba
                                                 </button>
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px' }}>
@@ -1762,7 +1816,7 @@ export default function SettingsPage() {
                                                         boxShadow: '0 6px 25px rgba(16, 185, 129, 0.5)'
                                                     }}
                                                 >
-                                                    <MessageCircle size={24} fill="white" />
+                                                    <img src="/Whatsapp.svg" alt="WhatsApp" style={{ width: '24px', height: '24px' }} />
                                                     Suscribirse Ahora
                                                 </button>
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px' }}>
@@ -1824,7 +1878,7 @@ export default function SettingsPage() {
                                                         boxShadow: '0 6px 20px rgba(16, 185, 129, 0.3)'
                                                     }}
                                                 >
-                                                    <MessageCircle size={22} fill="white" />
+                                                    <img src="/Whatsapp.svg" alt="WhatsApp" style={{ width: '22px', height: '22px' }} />
                                                     Adquirir Plan
                                                 </button>
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px' }}>

@@ -21,7 +21,7 @@ import { NotificationProvider } from './context/NotificationContext';
 import { AnalyticsProvider } from './context/AnalyticsContext'; // NEW
 import NotificationToast from './components/NotificationToast';
 import AuthListener from './components/AuthListener';
-import DevTools from './components/DevTools';
+
 
 // Private Route Wrapper
 const PrivateRoute = () => {
@@ -44,7 +44,7 @@ function App() {
                 <AnalyticsProvider>
                   <ScrollToTop />
                   <NotificationToast />
-                  <DevTools />
+
                   <Routes>
                     {/* Public Routes */}
                     <Route path="/login" element={<Login />} />
