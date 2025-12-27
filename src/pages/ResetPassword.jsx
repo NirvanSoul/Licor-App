@@ -13,7 +13,7 @@ export default function ResetPassword() {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
 
-    const { updatePassword } = useAuth();
+    const { updatePassword, user, loading: authLoading } = useAuth();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -67,14 +67,85 @@ export default function ResetPassword() {
 
                 {error && (
                     <div style={{
-                        background: '#FEE2E2', color: '#991B1B', padding: '0.75rem',
-                        borderRadius: '12px', marginBottom: '1rem', fontSize: '0.9rem', textAlign: 'center'
+                        background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '1rem',
+                        borderRadius: '16px', marginBottom: '1.5rem', fontSize: '0.95rem',
+                        textAlign: 'center', border: '1px solid rgba(239, 68, 68, 0.2)',
+                        fontWeight: 600
                     }}>
                         {error}
                     </div>
                 )}
 
-                {success ? (
+                {!success ? (
+                    <>
+                        {authLoading ? (
+                            <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem' }}>
+                                Verificando sesión...
+                            </div>
+                        ) : (
+                            <>
+                                {!user ? (
+                                    <div style={{
+                                        background: 'rgba(249, 115, 22, 0.1)', color: 'var(--accent-color)', padding: '1.25rem',
+                                        borderRadius: '16px', marginBottom: '1.5rem', fontSize: '0.95rem',
+                                        textAlign: 'center', border: '1px solid rgba(249, 115, 22, 0.2)',
+                                        fontWeight: 600
+                                    }}>
+                                        Sesión no detectada. Asegúrate de haber entrado por el link de tu correo.
+                                    </div>
+                                ) : (
+                                    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                        <div className="input-group-large" style={{ position: 'relative' }}>
+                                            <input
+                                                type={showPassword ? 'text' : 'password'}
+                                                placeholder="Nueva Contraseña"
+                                                value={password}
+                                                onChange={(e) => setPassword(e.target.value)}
+                                                required
+                                                minLength={6}
+                                                className="ticket-input-large"
+                                                style={{ width: '100%', boxSizing: 'border-box', paddingRight: '48px' }}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowPassword(!showPassword)}
+                                                style={{
+                                                    position: 'absolute', right: '14px', top: '50%',
+                                                    transform: 'translateY(-50%)', background: 'none',
+                                                    border: 'none', cursor: 'pointer', color: 'var(--text-secondary)',
+                                                    display: 'flex',
+                                                    alignItems: 'center'
+                                                }}
+                                            >
+                                                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                                            </button>
+                                        </div>
+
+                                        <div className="input-group-large">
+                                            <input
+                                                type={showPassword ? 'text' : 'password'}
+                                                placeholder="Confirmar Contraseña"
+                                                value={confirmPassword}
+                                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                                required
+                                                className="ticket-input-large"
+                                                style={{ width: '100%', boxSizing: 'border-box' }}
+                                            />
+                                        </div>
+
+                                        <button
+                                            type="submit"
+                                            disabled={loading}
+                                            className="btn-primary-gradient"
+                                        >
+                                            {loading ? 'Actualizando...' : 'Cambiar Contraseña'}
+                                        </button>
+                                    </form>
+                                )}
+                            </>
+                        )}
+                    </>
+                ) : (
                     <div style={{ textAlign: 'center' }}>
                         <div style={{
                             background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', padding: '2rem',
@@ -86,55 +157,6 @@ export default function ResetPassword() {
                             <span>¡Contraseña actualizada con éxito! Redirigiendo...</span>
                         </div>
                     </div>
-                ) : (
-                    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                        <div className="input-group-large" style={{ position: 'relative' }}>
-                            <input
-                                type={showPassword ? 'text' : 'password'}
-                                placeholder="Nueva Contraseña"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                                minLength={6}
-                                className="ticket-input-large"
-                                style={{ width: '100%', boxSizing: 'border-box', paddingRight: '40px' }}
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                style={{
-                                    position: 'absolute', right: '12px', top: '50%',
-                                    transform: 'translateY(-50%)', background: 'none',
-                                    border: 'none', cursor: 'pointer', color: 'var(--text-secondary)',
-                                    display: 'flex',
-                                    alignItems: 'center'
-                                }}
-                            >
-                                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                            </button>
-                        </div>
-
-                        <div className="input-group-large">
-                            <input
-                                type={showPassword ? 'text' : 'password'}
-                                placeholder="Confirmar Contraseña"
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                required
-                                className="ticket-input-large"
-                                style={{ width: '100%', boxSizing: 'border-box' }}
-                            />
-                        </div>
-
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="btn-primary-gradient"
-                            style={{ marginTop: '1rem' }}
-                        >
-                            {loading ? 'Actualizando...' : 'Cambiar Contraseña'}
-                        </button>
-                    </form>
                 )}
             </div>
         </div>

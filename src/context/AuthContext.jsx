@@ -24,12 +24,6 @@ export function AuthProvider({ children }) {
 
         // Listen for changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-            if (event === 'PASSWORD_RECOVERY') {
-                // We'll handle this in the app or via a direct check, 
-                // but let's make sure it doesn't just log them in and stay on home
-                window.location.href = `${window.location.origin}/reset-password`;
-            }
-
             if (session) {
                 fetchProfile(session.user);
             } else {

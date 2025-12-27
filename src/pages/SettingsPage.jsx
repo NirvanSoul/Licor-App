@@ -1052,7 +1052,7 @@ export default function SettingsPage() {
                     // Only show Activation for Leaders (Including Developer for testing/access)
                     ...((role && ['master', 'owner', 'admin', 'manager', 'developer'].some(r => role.toLowerCase().includes(r))) ? [{ id: 'activation', label: 'Activación', icon: ShieldCheck, color: '#10b981' }] : [])
                 ].map(item => {
-                    const isDisabled = isInactive && item.id !== 'activation';
+                    const isDisabled = isInactive && !['activation', 'users', 'app'].includes(item.id);
                     return (
                         <button
                             key={item.id}
