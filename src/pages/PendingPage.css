@@ -197,8 +197,8 @@
 
 .close-ticket-btn {
     width: 100%;
-    background: linear-gradient(135deg, #FA8E36 0%, #F97316 50%, #EA580C 100%);
-    color: white;
+    background: linear-gradient(135deg, #FA8E36 0%, #F97316 50%, #EA580C 100%) !important;
+    color: white !important;
     font-size: 1rem;
     font-weight: 700;
     padding: 0.9rem;
@@ -209,6 +209,7 @@
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     overflow: hidden;
+    z-index: 1;
 }
 
 .close-ticket-btn::before {
@@ -218,21 +219,29 @@
     left: -100%;
     width: 100%;
     height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
     transition: left 0.5s ease;
+    z-index: -1;
 }
 
-.close-ticket-btn:hover::before {
+.close-ticket-btn:not(:disabled):hover::before {
     left: 100%;
 }
 
-.close-ticket-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 28px rgba(249, 115, 22, 0.45);
+.close-ticket-btn:not(:disabled):hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 32px rgba(249, 115, 22, 0.5);
+    background: linear-gradient(135deg, #FB923C 0%, #F97316 50%, #EA580C 100%) !important;
 }
 
-.close-ticket-btn:active {
+.close-ticket-btn:not(:disabled):active {
     transform: scale(0.98) translateY(0);
+}
+
+.close-ticket-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
 }
 
 /* Ticket Grid Styles */
