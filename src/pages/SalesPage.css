@@ -18,28 +18,42 @@
 
 .option-btn {
     background-color: var(--bg-card);
-    border: 1px solid var(--accent-light);
+    border: 2px solid var(--accent-light);
     padding: 1rem 0.5rem;
-    border-radius: var(--radius-md);
-    font-weight: 500;
+    border-radius: 16px;
+    font-weight: 600;
     font-size: 0.9rem;
     color: var(--text-primary);
-    transition: all var(--transition-fast);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     text-align: center;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    cursor: pointer;
 }
 
 .option-btn:hover {
-    border-color: var(--text-primary);
-    transform: translateY(-1px);
+    border-color: #F97316;
+    background-color: rgba(249, 115, 22, 0.05);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.15);
+}
+
+.option-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(249, 115, 22, 0.1);
 }
 
 .option-btn.selected {
-    background-color: var(--text-primary);
-    color: var(--bg-card);
-    border: 2px solid var(--text-primary);
+    background: linear-gradient(135deg, #FA8E36 0%, #F97316 100%);
+    color: white;
+    border: 2px solid transparent;
     font-weight: 700;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 16px rgba(249, 115, 22, 0.35);
+}
+
+.option-btn.selected:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(249, 115, 22, 0.4);
+    background-color: transparent;
 }
 
 /* Toggle Switch Styles */
@@ -60,24 +74,29 @@
     font-weight: 600;
     color: var(--text-secondary);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: all 0.2s ease;
+}
+
+.toggle-option:hover {
+    color: var(--text-primary);
 }
 
 .toggle-option.active {
-    background-color: var(--text-primary);
+    background: var(--text-primary);
     color: var(--bg-card);
-    box-shadow: var(--shadow-sm);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 /* Summary Card */
 .order-summary-card {
     margin-top: 2rem;
-    border-radius: var(--radius-lg);
-    padding: 2.5rem 1.5rem 1.5rem;
-    background-color: var(--bg-card-hover);
-    box-shadow: var(--shadow-soft);
+    border-radius: 24px;
+    padding: 2rem 1.5rem 1.5rem;
+    background-color: var(--bg-card);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
     position: relative;
     overflow: hidden;
+    border: 1px solid var(--accent-light);
 }
 
 .order-summary-card::before {
@@ -87,7 +106,7 @@
     left: 0;
     right: 0;
     height: 4px;
-    background: linear-gradient(90deg, var(--text-primary), #444);
+    background: linear-gradient(90deg, #FA8E36 0%, #F97316 50%, #EA580C 100%);
 }
 
 
@@ -216,11 +235,7 @@
     font-size: 2rem;
     font-weight: 700;
     letter-spacing: -1px;
-    background: var(--Main-Gradiant, linear-gradient(180deg, #FF9C57 0%, #E65900 100%));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    color: transparent;
+    color: var(--accent-color);
 }
 
 .usd-price-text {
@@ -359,9 +374,9 @@
     padding: 0.75rem 0.25rem;
 }
 
-/* Confirm Button - Black */
+/* Confirm Button - Premium Orange Gradient */
 .create-ticket-btn {
-    background: var(--Main-Gradiant, linear-gradient(180deg, #FF9C57 0%, #E65900 100%));
+    background: linear-gradient(135deg, #FA8E36 0%, #F97316 50%, #EA580C 100%);
     color: white;
     width: 100%;
     padding: 1.25rem;
@@ -369,16 +384,52 @@
     margin-top: 0.5rem;
     font-weight: 700;
     font-size: 1.1rem;
-    box-shadow: 0 3px 6px 0 rgba(0, 0, 0, 0.20);
+    box-shadow: 0 6px 20px rgba(249, 115, 22, 0.35);
     border: none;
     cursor: pointer;
-    transition: transform var(--transition-fast);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
 }
 
+.create-ticket-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s ease;
+}
 
+.create-ticket-btn:hover::before {
+    left: 100%;
+}
+
+.create-ticket-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 28px rgba(249, 115, 22, 0.45);
+}
 
 .create-ticket-btn:active {
-    transform: scale(0.98);
+    transform: scale(0.98) translateY(0);
+    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
+}
+
+.create-ticket-btn:disabled {
+    background: linear-gradient(135deg, #d4d4d8 0%, #a1a1aa 100%);
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
+.create-ticket-btn:disabled:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.create-ticket-btn:disabled::before {
+    display: none;
 }
 
 /* Success Modal Styles */

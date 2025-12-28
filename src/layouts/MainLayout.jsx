@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ShoppingBag, Receipt, ClipboardList, Settings, Shield } from 'lucide-react';
 import InventoryFab from '../components/InventoryFab';
 import FreeTrialReminder from '../components/FreeTrialReminder';
@@ -16,14 +16,14 @@ export default function MainLayout() {
         const path = location.pathname;
         if (path.includes('vender')) return 'Para usar las funciones del menú Vender activa la licencia.';
         if (path.includes('caja')) return 'Para usar las funciones del menú Caja activa la licencia.';
-        if (path.includes('pendientes')) return 'Para usar las funciones del menú Pendientes activa la licencia.';
+        if (path.includes('pendientes')) return 'Para usar las funciones del menú Consumos activa la licencia.';
         return 'Activa Licencias en el menú activación en Ajustes para continuar usando la aplicación.';
     };
 
     const navItems = [
         { path: '/vender', label: 'Vender', icon: ShoppingBag },
-        { path: '/caja', label: 'Caja', icon: Receipt },
         { path: '/pendientes', label: 'Pendientes', icon: ClipboardList },
+        { path: '/caja', label: 'Caja', icon: Receipt },
         { path: '/ajustes', label: 'Ajustes', icon: Settings },
     ];
 
@@ -62,11 +62,108 @@ export default function MainLayout() {
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
+    // Get active index for sliding pill animation - pure CSS approach, no DOM measurements
+    const activeIndex = navItems.findIndex(item => location.pathname === item.path);
+    const sliderPosition = activeIndex >= 0 ? activeIndex : 0;
+
+    // Swipe navigation for mobile
+    const navigate = useNavigate();
+    const touchStart = React.useRef({ x: 0, y: 0 });
+    const touchEnd = React.useRef({ x: 0, y: 0 });
+    const containerRef = React.useRef(null);
+    const isTransitioning = React.useRef(false);
+    const [swipeDirection, setSwipeDirection] = React.useState(null);
+
+    React.useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const handleTouchStart = (e) => {
+            if (isTransitioning.current) return;
+            touchStart.current = {
+                x: e.touches[0].clientX,
+                y: e.touches[0].clientY
+            };
+            touchEnd.current = { x: 0, y: 0 };
+        };
+
+        const handleTouchMove = (e) => {
+            if (isTransitioning.current) return;
+            touchEnd.current = {
+                x: e.touches[0].clientX,
+                y: e.touches[0].clientY
+            };
+        };
+
+        const handleTouchEnd = () => {
+            if (isTransitioning.current || touchEnd.current.x === 0) return;
+
+            const deltaX = touchStart.current.x - touchEnd.current.x;
+            const deltaY = Math.abs(touchStart.current.y - touchEnd.current.y);
+            const minSwipeDistance = 80;
+
+            if (Math.abs(deltaX) > minSwipeDistance && Math.abs(deltaX) > deltaY * 1.8) {
+                let nextPath = null;
+                let outClass = '';
+                let inClass = '';
+
+                if (deltaX > 0) {
+                    // Swiped LEFT -> Next
+                    const nextIndex = activeIndex + 1;
+                    if (nextIndex < navItems.length) {
+                        nextPath = navItems[nextIndex].path;
+                        outClass = 'slide-out-left';
+                        inClass = 'slide-in-right';
+                    }
+                } else {
+                    // Swiped RIGHT -> Prev
+                    const prevIndex = activeIndex - 1;
+                    if (prevIndex >= 0) {
+                        nextPath = navItems[prevIndex].path;
+                        outClass = 'slide-out-right';
+                        inClass = 'slide-in-left';
+                    }
+                }
+
+                if (nextPath) {
+                    isTransitioning.current = true;
+                    setSwipeDirection(outClass);
+
+                    // Tiempo sincronizado con el CSS (0.12s)
+                    setTimeout(() => {
+                        window.scrollTo(0, 0);
+                        navigate(nextPath);
+                        // Aplicamos la entrada en el mismo ciclo para evitar el "blink"
+                        setSwipeDirection(inClass);
+
+                        // Limpiamos después de que la animación de entrada termine (0.2s)
+                        setTimeout(() => {
+                            setSwipeDirection(null);
+                            isTransitioning.current = false;
+                        }, 250);
+                    }, 120);
+                }
+            }
+        };
+
+        container.addEventListener('touchstart', handleTouchStart, { passive: true });
+        container.addEventListener('touchmove', handleTouchMove, { passive: true });
+        container.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+        return () => {
+            container.removeEventListener('touchstart', handleTouchStart);
+            container.removeEventListener('touchmove', handleTouchMove);
+            container.removeEventListener('touchend', handleTouchEnd);
+        };
+    }, [activeIndex, navItems, navigate]);
+
     return (
-        <div className="layout-container">
+        <div ref={containerRef} className="layout-container">
             <nav className={`main-nav ${isCompact ? 'compact-wrapper' : ''}`}>
-                <div className={`nav-pill ${isCompact ? 'compact' : ''}`}>
-                    {navItems.map((item) => (
+                <div className={`nav-pill ${isCompact ? 'compact' : ''}`} style={{ '--nav-items': navItems.length, '--active-index': sliderPosition }}>
+                    {/* Sliding background pill - uses CSS calc() for position */}
+                    <div className="nav-slider" />
+                    {navItems.map((item, index) => (
                         <NavLink
                             key={item.path}
                             to={item.path}
@@ -87,7 +184,7 @@ export default function MainLayout() {
                 </div>
             </nav>
 
-            <main className="main-content">
+            <main key={location.pathname} className={`main-content ${swipeDirection ? swipeDirection : ''}`}>
                 {(isLicenseActive === false && !isAjustes && !isDeveloper) ? (
                     <div style={{
                         height: '100%',

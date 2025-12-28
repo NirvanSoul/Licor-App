@@ -8,63 +8,61 @@ import { useOrder } from '../context/OrderContext';
 import './SalesPage.css';
 
 // --- HELPER COMPONENTS ---
-const VarietyToggle = ({ beerVariety, onToggle, isTercio, onTercioToggle }) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        {/* Tercio Toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>Tercio</span>
-            <button
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onTercioToggle();
-                }}
-                style={{
-                    width: '42px',
-                    height: '22px',
-                    borderRadius: '11px',
-                    background: isTercio ? 'var(--accent-color)' : 'rgba(128, 128, 128, 0.2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '2px',
-                    cursor: 'pointer',
-                    border: 'none',
-                    transition: 'all 0.3s ease',
-                    position: 'relative'
-                }}
-            >
-                <div style={{
-                    width: '18px',
-                    height: '18px',
-                    background: 'white',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transform: isTercio ? 'translateX(20px)' : 'translateX(0)',
-                    transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                }}>
-                    {isTercio && <Check size={10} color="var(--accent-color)" strokeWidth={4} />}
-                </div>
-            </button>
-        </div>
+const VarietyToggle = ({ beerVariety, onToggle }) => (
+    <div className="toggle-switch" style={{ height: '32px', padding: '2px', minWidth: '150px' }}>
+        <button
+            className={`toggle-option ${beerVariety === 'Normal' ? 'active' : ''}`}
+            onClick={(e) => { e.stopPropagation(); onToggle('Normal'); }}
+            style={{ fontSize: '0.75rem', flex: 1 }}
+        >
+            Normal
+        </button>
+        <button
+            className={`toggle-option ${beerVariety === 'Variado' ? 'active' : ''}`}
+            onClick={(e) => { e.stopPropagation(); onToggle('Variado'); }}
+            style={{ fontSize: '0.75rem', flex: 1 }}
+        >
+            Variado
+        </button>
+    </div>
+);
 
-        {/* Normal/Variado Toggle */}
-        <div className="toggle-switch" style={{ height: '28px', padding: '2px' }}>
-            <button
-                className={`toggle-option ${beerVariety === 'Normal' ? 'active' : ''}`}
-                onClick={(e) => { e.stopPropagation(); onToggle('Normal'); }}
-                style={{ fontSize: '0.7rem', padding: '0 8px' }}
-            >
-                Normal
-            </button>
-            <button
-                className={`toggle-option ${beerVariety === 'Variado' ? 'active' : ''}`}
-                onClick={(e) => { e.stopPropagation(); onToggle('Variado'); }}
-                style={{ fontSize: '0.7rem', padding: '0 8px' }}
-            >
-                Variado
-            </button>
-        </div>
+const TercioToggle = ({ isTercio, onTercioToggle }) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>Tercio</span>
+        <button
+            onClick={(e) => {
+                e.stopPropagation();
+                onTercioToggle();
+            }}
+            style={{
+                width: '42px',
+                height: '22px',
+                borderRadius: '11px',
+                background: isTercio ? 'var(--text-primary)' : 'rgba(128, 128, 128, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                padding: '2px',
+                cursor: 'pointer',
+                border: 'none',
+                transition: 'all 0.3s ease',
+                position: 'relative'
+            }}
+        >
+            <div style={{
+                width: '18px',
+                height: '18px',
+                background: 'white',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transform: isTercio ? 'translateX(20px)' : 'translateX(0)',
+                transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+            }}>
+                {isTercio && <Check size={10} color="var(--text-primary)" strokeWidth={4} />}
+            </div>
+        </button>
     </div>
 );
 
@@ -280,7 +278,7 @@ export default function SalesPage() {
     };
 
     const handleVarietyToggle = (variety) => {
-        setOrderState(prev => ({ ...prev, beerVariety: variety, beerType: null }));
+        setOrderState(prev => ({ ...prev, beerVariety: variety }));
 
         if (variety === 'Variado') {
             setMixedComposition({});
@@ -567,8 +565,17 @@ export default function SalesPage() {
                 onToggle={() => toggleSection('emission')}
                 selectionLabel={orderState.emission ? `${orderState.emission} (${orderState.subtype})` : null}
                 headerAction={
-                    <div onClick={(e) => e.stopPropagation()}>
-                        <ContainerSelector value={orderState.subtype} onChange={(val) => setOrderState(prev => ({ ...prev, subtype: val, emission: null }))} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }} onClick={(e) => e.stopPropagation()}>
+                        <ContainerSelector
+                            value={orderState.subtype}
+                            onChange={(val) => setOrderState(prev => ({
+                                ...prev,
+                                subtype: val,
+                                emission: null,
+                                // If switching to Botella Tercio via selector, auto-select beerType
+                                beerType: val === 'Botella Tercio' ? 'Tercio' : (prev.beerType === 'Tercio' ? null : prev.beerType)
+                            }))}
+                        />
                     </div>
                 }
             >
@@ -592,19 +599,24 @@ export default function SalesPage() {
                 onToggle={() => toggleSection('beer')}
                 selectionLabel={getBeerSelectionLabel()}
                 headerAction={
-                    <VarietyToggle
-                        beerVariety={orderState.beerVariety}
-                        onToggle={handleVarietyToggle}
-                        isTercio={orderState.subtype === 'Botella Tercio'}
-                        onTercioToggle={() => {
-                            const isTercio = orderState.subtype === 'Botella Tercio';
-                            setOrderState(prev => ({
-                                ...prev,
-                                subtype: isTercio ? 'Botella' : 'Botella Tercio',
-                                emission: null
-                            }));
-                        }}
-                    />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }} onClick={(e) => e.stopPropagation()}>
+                        <TercioToggle
+                            isTercio={orderState.subtype === 'Botella Tercio'}
+                            onTercioToggle={() => {
+                                const isTercioActive = orderState.subtype === 'Botella Tercio';
+                                setOrderState(prev => ({
+                                    ...prev,
+                                    subtype: isTercioActive ? 'Botella' : 'Botella Tercio',
+                                    beerType: isTercioActive ? null : 'Tercio',
+                                    // Keep variety so user can choose Variado Tercio
+                                }));
+                            }}
+                        />
+                        <VarietyToggle
+                            beerVariety={orderState.beerVariety}
+                            onToggle={handleVarietyToggle}
+                        />
+                    </div>
                 }
             >
 

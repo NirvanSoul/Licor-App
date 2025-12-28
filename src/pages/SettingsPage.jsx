@@ -128,6 +128,11 @@ const BeerDashboardCard = ({ beerName, searchFilter = '' }) => {
 
     // 4. Effects (Auto-expand & Subtype switching)
     useEffect(() => {
+        if (beerName === 'Tercio') {
+            setSubtype('Botella Tercio');
+            return;
+        }
+
         if (!normalizedQuery) return;
 
         // Auto-expand ONLY if it's a strong match (Name match 80+, or Emission match 70+)
@@ -180,10 +185,12 @@ const BeerDashboardCard = ({ beerName, searchFilter = '' }) => {
                     <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>{beerName}</h3>
                 </div>
 
-                {/* Stop propagation on selector so we can change type without toggling card */}
-                <div style={{ width: '200px' }} onClick={(e) => e.stopPropagation()}>
-                    <ContainerSelector value={subtype} onChange={setSubtype} />
-                </div>
+                {/* Hide selector for Tercio as requested */}
+                {beerName !== 'Tercio' && (
+                    <div style={{ width: '200px' }} onClick={(e) => e.stopPropagation()}>
+                        <ContainerSelector value={subtype} onChange={setSubtype} />
+                    </div>
+                )}
             </div>
 
             {isExpanded && (
@@ -307,12 +314,16 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
 
     // Auto-expand if search matches
     useEffect(() => {
+        if (beerName === 'Tercio') {
+            setSubtype('Botella Tercio');
+        }
+
         if (searchFilter && searchFilter.length > 1) {
             setIsExpanded(true);
         } else {
             setIsExpanded(false);
         }
-    }, [searchFilter]);
+    }, [searchFilter, beerName]);
 
     // Memoize calculating emissions to prevent infinite render loop
     const emissions = React.useMemo(() =>
@@ -426,78 +437,80 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
                     <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>{beerName}</h3>
                 </div>
 
-                <div className="price-editor-controls" onClick={(e) => e.stopPropagation()}>
-                    {/* Currency Mode Toggle (Premium Pill Design) */}
-                    <div className="currency-toggle-container" style={{
-                        position: 'relative',
-                        display: 'flex',
-                        background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#e5e7eb',
-                        borderRadius: '999px',
-                        padding: '2px',
-                        width: '100px',
-                        height: '32px',
-                        isolation: 'isolate'
-                    }}>
-                        {/* The Sliding Pill */}
-                        <div style={{
-                            position: 'absolute',
-                            top: '2px',
-                            bottom: '2px',
-                            left: '2px',
-                            width: 'calc(50% - 2px)',
-                            background: '#10b981',
+                {beerName !== 'Tercio' && (
+                    <div className="price-editor-controls" onClick={(e) => e.stopPropagation()}>
+                        {/* Currency Mode Toggle (Premium Pill Design) */}
+                        <div className="currency-toggle-container" style={{
+                            position: 'relative',
+                            display: 'flex',
+                            background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#e5e7eb',
                             borderRadius: '999px',
-                            transform: currencyMode === 'BS' ? 'translateX(100%)' : 'translateX(0)',
-                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                            zIndex: 1
-                        }} />
+                            padding: '2px',
+                            width: '100px',
+                            height: '32px',
+                            isolation: 'isolate'
+                        }}>
+                            {/* The Sliding Pill */}
+                            <div style={{
+                                position: 'absolute',
+                                top: '2px',
+                                bottom: '2px',
+                                left: '2px',
+                                width: 'calc(50% - 2px)',
+                                background: '#10b981',
+                                borderRadius: '999px',
+                                transform: currencyMode === 'BS' ? 'translateX(100%)' : 'translateX(0)',
+                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                zIndex: 1
+                            }} />
 
-                        {/* USD Option */}
-                        <button
-                            onClick={() => setCurrencyMode('USD')}
-                            style={{
-                                flex: 1,
-                                border: 'none',
-                                background: 'transparent',
-                                color: currencyMode === 'USD' ? 'white' : '#6b7280',
-                                fontWeight: 800,
-                                fontSize: '0.75rem',
-                                zIndex: 2,
-                                cursor: 'pointer',
-                                transition: 'color 0.3s'
-                            }}
-                        >
-                            USD
-                        </button>
+                            {/* USD Option */}
+                            <button
+                                onClick={() => setCurrencyMode('USD')}
+                                style={{
+                                    flex: 1,
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: currencyMode === 'USD' ? 'white' : '#6b7280',
+                                    fontWeight: 800,
+                                    fontSize: '0.75rem',
+                                    zIndex: 2,
+                                    cursor: 'pointer',
+                                    transition: 'color 0.3s'
+                                }}
+                            >
+                                USD
+                            </button>
 
-                        {/* BS Option */}
-                        <button
-                            onClick={() => setCurrencyMode('BS')}
-                            style={{
-                                flex: 1,
-                                border: 'none',
-                                background: 'transparent',
-                                color: currencyMode === 'BS' ? 'white' : '#6b7280',
-                                fontWeight: 800,
-                                fontSize: '0.75rem',
-                                zIndex: 2,
-                                cursor: 'pointer',
-                                transition: 'color 0.3s'
-                            }}
-                        >
-                            BS
-                        </button>
+                            {/* BS Option */}
+                            <button
+                                onClick={() => setCurrencyMode('BS')}
+                                style={{
+                                    flex: 1,
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: currencyMode === 'BS' ? 'white' : '#6b7280',
+                                    fontWeight: 800,
+                                    fontSize: '0.75rem',
+                                    zIndex: 2,
+                                    cursor: 'pointer',
+                                    transition: 'color 0.3s'
+                                }}
+                            >
+                                BS
+                            </button>
+                        </div>
+
+                        <div className="subtype-selector-container" style={{ width: '180px', display: 'flex', alignItems: 'center' }}>
+                            <ContainerSelector value={subtype} onChange={setSubtype} />
+                        </div>
                     </div>
-
-                    <div className="subtype-selector-container" style={{ width: '180px', display: 'flex', alignItems: 'center' }}>
-                        <ContainerSelector value={subtype} onChange={setSubtype} />
-                    </div>
-                </div>
+                )}
             </div>
 
             {/* Collapsible Content */}
             {isExpanded && (
-                <div style={{ animation: 'fadeIn 0.3s ease', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ animation: 'fadeIn 0.3s ease', display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1.5rem' }}>
 
                     {filteredEmissions.length === 0 && (
                         <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem', padding: '1rem' }}>
@@ -597,7 +610,8 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
                         </button>
                     </div>
                 </div>
-            )}
+            )
+            }
 
             <style jsx>{`
                 .order-summary-card > div > div:last-child { border-bottom: none !important; padding-bottom: 0 !important; }
@@ -643,99 +657,101 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
             `}</style>
 
             {/* LOCAL POPUP FOR PRICE UPDATES */}
-            {successPopup && (
-                <div
-                    onClick={() => setSuccessPopup(null)}
-                    style={{
-                        position: 'fixed', inset: 0, zIndex: 10000,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)'
-                    }}
-                >
+            {
+                successPopup && (
                     <div
-                        onClick={e => e.stopPropagation()}
+                        onClick={() => setSuccessPopup(null)}
                         style={{
-                            backgroundColor: 'var(--bg-card)',
-                            backdropFilter: 'blur(12px)',
-                            WebkitBackdropFilter: 'blur(12px)',
-                            color: 'var(--text-primary)',
-                            padding: '24px 32px',
-                            borderRadius: '20px',
-                            boxShadow: 'var(--shadow-lg)',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '12px',
-                            minWidth: '320px',
-                            maxWidth: '400px',
-                            textAlign: 'center',
-                            border: '1px solid var(--accent-light)',
-                            animation: 'fadeInPopup 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                            position: 'relative'
-                        }}>
-                        <button
-                            onClick={() => setSuccessPopup(null)}
+                            position: 'fixed', inset: 0, zIndex: 10000,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)'
+                        }}
+                    >
+                        <div
+                            onClick={e => e.stopPropagation()}
                             style={{
-                                position: 'absolute',
-                                top: '12px',
-                                right: '12px',
-                                background: 'none',
-                                border: 'none',
+                                backgroundColor: 'var(--bg-card)',
+                                backdropFilter: 'blur(12px)',
+                                WebkitBackdropFilter: 'blur(12px)',
                                 color: 'var(--text-primary)',
-                                opacity: 0.5,
-                                cursor: 'pointer',
-                                padding: '4px'
-                            }}
-                        >
-                            <X size={18} />
-                        </button>
-                        <div>
-                            <div style={{
-                                width: '40px', height: '40px', borderRadius: '50%',
-                                background: 'rgba(74, 222, 128, 0.2)', color: '#4ade80',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                marginBottom: '12px',
-                                margin: '0 auto'
+                                padding: '24px 32px',
+                                borderRadius: '20px',
+                                boxShadow: 'var(--shadow-lg)',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '12px',
+                                minWidth: '320px',
+                                maxWidth: '400px',
+                                textAlign: 'center',
+                                border: '1px solid var(--accent-light)',
+                                animation: 'fadeInPopup 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                                position: 'relative'
                             }}>
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                    <polyline points="20 6 9 17 4 12"></polyline>
-                                </svg>
-                            </div>
+                            <button
+                                onClick={() => setSuccessPopup(null)}
+                                style={{
+                                    position: 'absolute',
+                                    top: '12px',
+                                    right: '12px',
+                                    background: 'none',
+                                    border: 'none',
+                                    color: 'var(--text-primary)',
+                                    opacity: 0.5,
+                                    cursor: 'pointer',
+                                    padding: '4px'
+                                }}
+                            >
+                                <X size={18} />
+                            </button>
+                            <div>
+                                <div style={{
+                                    width: '40px', height: '40px', borderRadius: '50%',
+                                    background: 'rgba(74, 222, 128, 0.2)', color: '#4ade80',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    marginBottom: '12px',
+                                    margin: '0 auto'
+                                }}>
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                </div>
 
-                            {typeof successPopup === 'string' ? (
-                                <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>{successPopup}</span>
-                            ) : (
-                                <>
-                                    <h4 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', color: 'var(--text-primary)', fontWeight: 700 }}>
-                                        Actualizado {successPopup.beerName} ({successPopup.subtype})
-                                    </h4>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
-                                        {successPopup.changes.map((change, idx) => (
-                                            <div key={idx} style={{
-                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                                background: 'var(--bg-card-hover)', padding: '10px 14px', borderRadius: '12px',
-                                                fontSize: '0.9rem',
-                                                border: '1px solid var(--accent-light)'
-                                            }}>
-                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                                                    <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '1rem' }}>{change.emission}</span>
-                                                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{change.type}</span>
+                                {typeof successPopup === 'string' ? (
+                                    <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>{successPopup}</span>
+                                ) : (
+                                    <>
+                                        <h4 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', color: 'var(--text-primary)', fontWeight: 700 }}>
+                                            Actualizado {successPopup.beerName} ({successPopup.subtype})
+                                        </h4>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                                            {successPopup.changes.map((change, idx) => (
+                                                <div key={idx} style={{
+                                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                    background: 'var(--bg-card-hover)', padding: '10px 14px', borderRadius: '12px',
+                                                    fontSize: '0.9rem',
+                                                    border: '1px solid var(--accent-light)'
+                                                }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                                                        <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '1rem' }}>{change.emission}</span>
+                                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{change.type}</span>
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <span style={{ color: 'var(--text-muted)', textDecoration: 'line-through' }}>{currencySymbol}{change.old}</span>
+                                                        <span style={{ color: 'var(--text-muted)' }}>→</span>
+                                                        <span style={{ color: '#34c759', fontWeight: 'bold' }}>{currencySymbol}{change.new}</span>
+                                                    </div>
                                                 </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <span style={{ color: 'var(--text-muted)', textDecoration: 'line-through' }}>{currencySymbol}{change.old}</span>
-                                                    <span style={{ color: 'var(--text-muted)' }}>→</span>
-                                                    <span style={{ color: '#34c759', fontWeight: 'bold' }}>{currencySymbol}{change.new}</span>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </>
-                            )}
+                                            ))}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
         </div >
     );
 };
@@ -799,6 +815,18 @@ export default function SettingsPage() {
         };
         fetchLicense();
     }, [role, organizationId, currentView]);
+
+    // --- ENSURE TERCIO EXISTS ---
+    useEffect(() => {
+        if (!beerTypes || beerTypes.length === 0) return;
+        if (!['master', 'owner', 'admin', 'manager', 'developer'].some(r => role?.toLowerCase()?.includes(r))) return;
+
+        const hasTercio = beerTypes.some(b => b.toLowerCase() === 'tercio');
+        if (!hasTercio) {
+            console.log("Auto-creating constant Tercio product...");
+            addBeerType('Tercio', '#EA580C', 'Botella Tercio');
+        }
+    }, [beerTypes, role, addBeerType]);
 
     // URL View Management
     useEffect(() => {
@@ -993,7 +1021,7 @@ export default function SettingsPage() {
             showNotification('Producto agregado exitosamente', 'success');
         } catch (error) {
             console.error("Error adding beer:", error);
-            showNotification('Error al agregar el producto.', 'error');
+            showNotification(`Error: ${error.message || 'Error al agregar el producto'}`, 'error');
         }
     };
 
@@ -1207,26 +1235,25 @@ export default function SettingsPage() {
 
     return (
         <div className="sales-container-v2" style={{ padding: '1rem' }}>
-            {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '2rem', position: 'relative' }}>
-                {currentView !== 'main' && (
+            {/* Header - Only show for subviews */}
+            {currentView !== 'main' && (
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '2rem', position: 'relative' }}>
                     <button
                         onClick={() => setCurrentView('main')}
                         style={{ position: 'absolute', left: 0, background: 'none', border: 'none', padding: '8px', cursor: 'pointer' }}
                     >
                         <ChevronLeft size={28} color="var(--text-primary)" />
                     </button>
-                )}
-                <h1 className="payment-section-title" style={{ fontSize: '1.5rem', margin: '0 auto' }}>
-                    {currentView === 'main' && 'Ajustes'}
-                    {currentView === 'bcv' && 'Tasas '}
-                    {currentView === 'products' && 'Gestion de Productos'}
-                    {currentView === 'dashboard' && 'Precios Actuales'}
-                    {currentView === 'users' && 'Usuarios'}
-                    {currentView === 'inventory' && 'Inventario'}
-                    {currentView === 'activation' && 'Activación de Licencia'}
-                </h1>
-            </div>
+                    <h1 className="payment-section-title" style={{ fontSize: '1.5rem', margin: '0 auto', paddingLeft: '48px', paddingRight: '48px' }}>
+                        {currentView === 'bcv' && 'Tasas '}
+                        {currentView === 'products' && 'Gestion de Productos'}
+                        {currentView === 'dashboard' && 'Precios Actuales'}
+                        {currentView === 'users' && 'Usuarios'}
+                        {currentView === 'inventory' && 'Inventario'}
+                        {currentView === 'activation' && 'Activación de Licencia'}
+                    </h1>
+                </div>
+            )}
 
             {currentView === 'main' && <MainMenu />}
 
@@ -1525,22 +1552,49 @@ export default function SettingsPage() {
                     </button>
 
 
-                    {Array.isArray(beerTypes) && [...beerTypes]
-                        .sort((a, b) => {
-                            if (!searchQuery || searchQuery.length < 2) return 0;
-                            // For sorting, we can just use the score based on beer name match
-                            // or a simplified version since we don't have emissions here easily.
-                            const scoreA = getGlobalSearchScore(a, searchQuery);
-                            const scoreB = getGlobalSearchScore(b, searchQuery);
-                            return scoreB - scoreA;
-                        })
-                        .map(beer => (
-                            isEditMode ? (
-                                <BeerPriceEditor key={beer} beerName={beer} searchFilter={searchQuery} />
-                            ) : (
-                                <BeerDashboardCard key={beer} beerName={beer} searchFilter={searchQuery} />
-                            )
-                        ))}
+                    <div style={{ display: 'grid', gap: '1rem' }}>
+                        {Array.isArray(beerTypes) && [...beerTypes]
+                            .filter(beer => beer.toLowerCase() !== 'tercio')
+                            .sort((a, b) => {
+                                if (!searchQuery || searchQuery.length < 2) return 0;
+                                const scoreA = getGlobalSearchScore(a, searchQuery);
+                                const scoreB = getGlobalSearchScore(b, searchQuery);
+                                return scoreB - scoreA;
+                            })
+                            .map(beer => (
+                                isEditMode ? (
+                                    <BeerPriceEditor key={beer} beerName={beer} searchFilter={searchQuery} />
+                                ) : (
+                                    <BeerDashboardCard key={beer} beerName={beer} searchFilter={searchQuery} />
+                                )
+                            ))}
+                    </div>
+
+                    <div style={{ margin: '1rem 0', height: '1px', background: 'var(--accent-light)', opacity: 0.5 }}></div>
+
+                    {/* --- CONSTANT TERCIO SECTION AT THE BOTTOM --- */}
+                    <div style={{ marginTop: '1rem' }}>
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            marginBottom: '1rem',
+                            padding: '0 0.5rem',
+                            color: '#EA580C',
+                            fontSize: '0.75rem',
+                            fontWeight: 800,
+                            textTransform: 'uppercase',
+                            letterSpacing: '1px'
+                        }}>
+                            <Star size={14} fill="#EA580C" />
+                            <span>Precio Maestro: Tercio (Formato Especial)</span>
+                        </div>
+                        {isEditMode ? (
+                            <BeerPriceEditor beerName="Tercio" searchFilter="" />
+                        ) : (
+                            <BeerDashboardCard beerName="Tercio" searchFilter="" />
+                        )}
+                    </div>
                     {(!beerTypes || beerTypes.length === 0) && (
                         <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
                             <p>No hay tipos de cerveza registrados.</p>
@@ -2016,8 +2070,8 @@ export default function SettingsPage() {
                                         />
                                     </div>
 
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', justifyContent: 'space-between' }}>
-                                        <div style={{ flex: 1, maxWidth: '200px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                                        <div style={{ minWidth: '140px' }}>
                                             <div style={{
                                                 position: 'relative',
                                                 display: 'flex',

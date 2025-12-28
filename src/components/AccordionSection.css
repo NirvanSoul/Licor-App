@@ -1,9 +1,20 @@
 .accordion-section {
-    background-color: var(--bg-card-hover);
-    border-radius: var(--radius-lg);
+    background-color: var(--bg-card);
+    border-radius: 20px;
     margin-bottom: 1rem;
     overflow: hidden;
-    transition: all var(--transition-smooth);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid var(--accent-light);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.accordion-section:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.accordion-section.open {
+    box-shadow: 0 4px 16px rgba(249, 115, 22, 0.1);
+    border-color: rgba(249, 115, 22, 0.2);
 }
 
 .accordion-header-row {
@@ -40,13 +51,15 @@
 }
 
 .selection-preview {
-    background-color: var(--text-primary);
-    color: var(--bg-card);
-    padding: 0.25rem 0.75rem;
-    border-radius: var(--radius-full);
+    background: linear-gradient(135deg, #FA8E36 0%, #F97316 100%);
+    color: white;
+    padding: 0.35rem 0.85rem;
+    border-radius: 20px;
     font-size: 0.75rem;
-    font-weight: 600;
+    font-weight: 700;
     line-height: 1.2;
+    box-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
+    text-transform: capitalize;
 }
 
 .accordion-action {

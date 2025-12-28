@@ -118,7 +118,7 @@ export default function PendingPage() {
             const isOpenTab = order.items.some(i => i.emission === 'Libre');
 
             return (
-                <div key={order.id} className="order-card">
+                <div key={order.id} className={`order-card ${expandedOrders[order.id] ? 'expanded' : ''}`}>
                     <div
                         className="order-header"
                         onClick={() => toggleOrder(order.id)}
@@ -250,8 +250,11 @@ export default function PendingPage() {
     return (
         <div className="page-container">
             <header className="page-header" style={{ marginBottom: '1.5rem', display: 'block' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                    <h1 className="text-2xl font-bold text-primary">Cuentas Abiertas</h1>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                    <div>
+                        <h1 className="text-2xl font-bold text-primary">Cuentas Abiertas</h1>
+                        <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.95rem' }}>Gestión de tickets y consumos pendientes</p>
+                    </div>
                     <div className="header-badges" style={{ display: 'flex', gap: '8px' }}>
                         <span className="badge-active">{openOrders.length} Activas</span>
                     </div>
@@ -270,22 +273,7 @@ export default function PendingPage() {
                 }}>
                     <button
                         onClick={handleQuickOpenTab}
-                        style={{
-                            flex: 1,
-                            padding: '12px 1.5rem',
-                            borderRadius: '12px',
-                            background: 'linear-gradient(135deg, #F97316 0%, #EA580C 100%)',
-                            color: 'white',
-                            border: 'none',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '8px',
-                            transition: 'all 0.2s',
-                            whiteSpace: 'nowrap'
-                        }}
+                        className="open-tab-btn"
                     >
                         <Plus size={20} />
                         Abrir Carta

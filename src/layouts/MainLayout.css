@@ -22,7 +22,29 @@
     padding: 0.5rem;
     border-radius: var(--radius-full);
     box-shadow: var(--shadow-soft);
-    gap: 0.5rem;
+    gap: 0;
+    position: relative;
+    overflow: hidden;
+    min-width: 500px;
+    /* Base width for desktop */
+}
+
+/* Sliding pill background - Pure CSS approach */
+.nav-slider {
+    position: absolute;
+    top: 0.5rem;
+    bottom: 0.5rem;
+    /* Width = (100% - padding) / number of items */
+    width: calc((100% - 1rem) / var(--nav-items, 4));
+    /* Position = index * width */
+    left: calc(0.5rem + (var(--active-index, 0) * ((100% - 1rem) / var(--nav-items, 4))));
+    background: linear-gradient(135deg, #FA8E36 0%, #F97316 100%);
+    border-radius: var(--radius-full);
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.35);
+    z-index: 0;
+    pointer-events: none;
+    will-change: left;
 }
 
 .nav-item {
@@ -30,14 +52,19 @@
     flex-direction: column;
     align-items: center;
     gap: 0.25rem;
-    padding: 0.75rem 2rem;
-    /* min-width: 100px;  <-- REMOVED: This was causing the overflow on mobile */
+    padding: 0.75rem 0;
+    /* Unify padding, remove horizontal for better calc */
+    flex: 1;
+    /* Each item takes equal space */
+    min-width: 100px;
+    /* Base width for desktop items */
     border-radius: var(--radius-full);
     color: var(--text-secondary);
     text-decoration: none;
-    transition: all var(--transition-smooth);
+    transition: all 0.3s ease;
     white-space: nowrap;
-    /* Prevent label wrapping unless we want it */
+    position: relative;
+    z-index: 1;
 }
 
 .nav-item:hover {
@@ -46,12 +73,18 @@
 }
 
 .nav-item.active {
-    color: var(--text-primary);
-    background-color: var(--bg-card);
+    color: #fff;
+    background: transparent;
+    box-shadow: none;
+    transform: translateY(-1px);
 }
 
 .nav-item.active .nav-icon {
-    stroke: var(--text-primary);
+    stroke: #fff;
+}
+
+.nav-item.active .nav-label {
+    font-weight: 600;
 }
 
 .nav-label {
@@ -61,11 +94,70 @@
 
 .main-content {
     flex: 1;
-    /* overflow-y: auto; REMOVED to let body scroll */
     padding: 1rem 2rem;
     max-width: 1200px;
     width: 100%;
     margin: 0 auto;
+    position: relative;
+    /* Hardware acceleration */
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    will-change: transform, opacity;
+}
+
+/* Contenedor principal */
+.layout-container {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    position: relative;
+}
+
+/* SALIDA ULTRA RÁPIDA: Sin parpadeos */
+.main-content.slide-out-left {
+    transition: transform 0.12s ease-in, opacity 0.12s ease-in;
+    transform: translateX(-40px);
+    opacity: 0;
+}
+
+.main-content.slide-out-right {
+    transition: transform 0.12s ease-in, opacity 0.12s ease-in;
+    transform: translateX(40px);
+    opacity: 0;
+}
+
+/* ENTRADA RÁPIDA: Con fill-mode para evitar el "blink" */
+.main-content.slide-in-right {
+    animation: slideInFromRight 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.main-content.slide-in-left {
+    animation: slideInFromLeft 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes slideInFromRight {
+    0% {
+        transform: translateX(30px);
+        opacity: 0;
+    }
+
+    100% {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideInFromLeft {
+    0% {
+        transform: translateX(-30px);
+        opacity: 0;
+    }
+
+    100% {
+        transform: translateX(0);
+        opacity: 1;
+    }
 }
 
 /* Dark Mode Contrast Boost for Menu */
@@ -97,6 +189,8 @@
     .nav-pill {
         pointer-events: auto;
         width: 100%;
+        min-width: 0;
+        /* Reset desktop value */
         justify-content: space-between;
         gap: 0px;
         /* Zero gap for maximum space */
@@ -105,6 +199,23 @@
         /* Tighter padding container */
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         height: auto;
+    }
+
+    .nav-slider {
+        top: 0.5rem;
+        bottom: 0.5rem;
+        /* Recalculate for mobile padding */
+        width: calc((100% - 1rem) / var(--nav-items, 4));
+        left: calc(0.5rem + (var(--active-index, 0) * ((100% - 1rem) / var(--nav-items, 4))));
+    }
+
+    .nav-pill.compact .nav-slider {
+        top: 0.4rem;
+        bottom: 0.4rem;
+        /* Recalculate for compact padding (0.8rem total) */
+        width: calc((100% - 0.8rem) / var(--nav-items, 4));
+        left: calc(0.4rem + (var(--active-index, 0) * ((100% - 0.8rem) / var(--nav-items, 4))));
+        border-radius: 16px;
     }
 
     /* COMPACT MODE PILL */
@@ -142,6 +253,17 @@
     /* COMPACT MODE ITEM */
     .nav-pill.compact .nav-item {
         padding: 0.25rem 0;
+    }
+
+    /* Active item styling for mobile */
+    .nav-item.active {
+        box-shadow: none;
+        border-radius: var(--radius-full);
+    }
+
+    .nav-pill.compact .nav-item.active {
+        box-shadow: none;
+        border-radius: var(--radius-full);
     }
 
     .nav-label {

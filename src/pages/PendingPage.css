@@ -42,18 +42,24 @@
 /* Order Card */
 .order-card {
     background: var(--bg-card);
-    border-radius: 16px;
+    border-radius: 20px;
     padding: 1.25rem;
-    box-shadow: var(--shadow-sm);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
     display: flex;
     flex-direction: column;
-    transition: transform 0.2s;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     border: 1px solid var(--accent-light);
 }
 
 .order-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(249, 115, 22, 0.15);
+    border-color: rgba(249, 115, 22, 0.3);
+}
+
+.order-card.expanded {
+    box-shadow: 0 8px 32px rgba(249, 115, 22, 0.2);
+    border-color: rgba(249, 115, 22, 0.4);
 }
 
 .order-header {
@@ -86,18 +92,23 @@
 }
 
 .time-badge {
-    background: #FEF3C7;
-    /* Warning light */
-    color: #D97706;
-    padding: 0.25rem 0.5rem;
-    border-radius: 999px;
-    font-size: 0.75rem;
-    font-weight: 600;
+    background: linear-gradient(135deg, rgba(249, 115, 22, 0.15) 0%, rgba(234, 88, 12, 0.1) 100%);
+    color: #F97316;
+    padding: 0.35rem 0.65rem;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    border: 1px solid rgba(249, 115, 22, 0.2);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    line-height: 1.3;
 }
 
 .dark .time-badge {
-    background: #78350f;
-    color: #fcd34d;
+    background: linear-gradient(135deg, rgba(249, 115, 22, 0.2) 0%, rgba(234, 88, 12, 0.15) 100%);
+    color: #FB923C;
+    border-color: rgba(249, 115, 22, 0.3);
 }
 
 .order-items-list {
@@ -147,31 +158,37 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    padding: 0.6rem;
-    border-radius: 10px;
+    padding: 0.7rem;
+    border-radius: 12px;
     font-weight: 600;
     font-size: 0.9rem;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     border: none;
 }
 
 .action-btn.add {
     background: var(--bg-card-hover);
     color: var(--text-primary);
+    border: 1px solid var(--accent-light);
 }
 
 .action-btn.add:hover {
-    background: var(--accent-light);
+    background: rgba(249, 115, 22, 0.1);
+    border-color: #F97316;
+    color: #F97316;
+    transform: translateY(-1px);
 }
 
 .action-btn.pay {
     background: linear-gradient(135deg, #10B981 0%, #059669 100%);
     color: white;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
 .action-btn.pay:hover {
-    opacity: 0.9;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
 }
 
 .actions-row-single {
@@ -180,28 +197,56 @@
 
 .close-ticket-btn {
     width: 100%;
-    background: linear-gradient(135deg, #F97316 0%, #EA580C 100%);
+    background: linear-gradient(135deg, #FA8E36 0%, #F97316 50%, #EA580C 100%);
     color: white;
     font-size: 1rem;
-    padding: 0.8rem;
-    border-radius: 12px;
-    box-shadow: 0 4px 6px -1px rgba(249, 115, 22, 0.3);
+    font-weight: 700;
+    padding: 0.9rem;
+    border-radius: 14px;
+    box-shadow: 0 6px 20px rgba(249, 115, 22, 0.35);
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.close-ticket-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s ease;
+}
+
+.close-ticket-btn:hover::before {
+    left: 100%;
 }
 
 .close-ticket-btn:hover {
-    background: linear-gradient(135deg, #F97316 0%, #EA580C 100%);
-    box-shadow: 0 10px 15px -3px rgba(249, 115, 22, 0.4);
-    transform: translateY(-1px);
-    opacity: 0.95;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 28px rgba(249, 115, 22, 0.45);
+}
+
+.close-ticket-btn:active {
+    transform: scale(0.98) translateY(0);
 }
 
 /* Ticket Grid Styles */
 .ticket-grid-container {
-    background: var(--bg-card);
+    background: var(--bg-card-hover);
     border-radius: 16px;
     padding: 1rem;
     margin-bottom: 1rem;
     border: 1px solid var(--accent-light);
+    transition: all 0.2s ease;
+}
+
+.ticket-grid-container:hover {
+    border-color: rgba(249, 115, 22, 0.2);
 }
 
 .ticket-grid-header {
@@ -244,14 +289,14 @@
 
 .beer-selector-btn {
     padding: 0.25rem 0.1rem;
-    border-radius: 8px;
-    border: 1px solid var(--accent-light);
-    background: var(--bg-card-hover);
+    border-radius: 10px;
+    border: 1.5px solid var(--accent-light);
+    background: var(--bg-card);
     font-weight: 600;
     font-size: 0.75rem;
     color: var(--text-primary);
     cursor: pointer;
-    transition: all 0.1s;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     height: 48px;
     display: flex;
     align-items: center;
@@ -262,9 +307,22 @@
     overflow: hidden;
 }
 
+.beer-selector-btn:hover {
+    border-color: #F97316;
+    background: rgba(249, 115, 22, 0.08);
+    transform: translateY(-1px);
+}
+
 .beer-selector-btn:active {
-    background: var(--accent-light);
+    background: rgba(249, 115, 22, 0.15);
     transform: scale(0.98);
+}
+
+.beer-selector-btn.selected {
+    background: linear-gradient(135deg, #FA8E36 0%, #F97316 100%);
+    color: white;
+    border-color: transparent;
+    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
 }
 
 .slot-badge {
@@ -368,21 +426,30 @@
     gap: 0.75rem;
 }
 
-.option-btn {
+.pending-option-btn {
     padding: 1rem;
-    border-radius: 12px;
-    border: 1px solid var(--accent-light);
+    border-radius: 14px;
+    border: 2px solid var(--accent-light);
     background: var(--bg-card);
     font-weight: 600;
     color: var(--text-primary);
     cursor: pointer;
-    transition: all 0.2s;
-    box-shadow: var(--shadow-sm);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
-.option-btn:hover {
+.pending-option-btn:hover {
     border-color: #F97316;
-    box-shadow: var(--shadow-md);
+    background: rgba(249, 115, 22, 0.05);
+    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.15);
+    transform: translateY(-2px);
+}
+
+.pending-option-btn.selected {
+    background: linear-gradient(135deg, #FA8E36 0%, #F97316 100%);
+    color: white;
+    border-color: transparent;
+    box-shadow: 0 4px 16px rgba(249, 115, 22, 0.35);
 }
 
 /* Delete Button Specifics matching mockup */
@@ -453,4 +520,121 @@
         padding: 0 0.75rem !important;
         /* Ensure square-ish shape */
     }
+}
+
+/* Open Tab Button - Premium Style */
+.open-tab-btn {
+    flex: 1;
+    padding: 12px 1.5rem;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #FA8E36 0%, #F97316 50%, #EA580C 100%);
+    color: white;
+    border: none;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    white-space: nowrap;
+    box-shadow: 0 4px 16px rgba(249, 115, 22, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.open-tab-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s ease;
+}
+
+.open-tab-btn:hover::before {
+    left: 100%;
+}
+
+.open-tab-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 24px rgba(249, 115, 22, 0.4);
+}
+
+.open-tab-btn:active {
+    transform: scale(0.98);
+}
+
+/* Waste Report Button - Enhanced */
+.waste-report-btn {
+    background: var(--bg-card) !important;
+    color: #EF4444 !important;
+    border: 1.5px solid rgba(239, 68, 68, 0.3) !important;
+    padding: 0 1.25rem;
+    border-radius: 14px !important;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    white-space: nowrap;
+}
+
+.waste-report-btn:hover {
+    background: rgba(239, 68, 68, 0.08) !important;
+    border-color: #EF4444 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
+}
+
+/* Active Badge styling */
+.badge-active {
+    background: linear-gradient(135deg, rgba(249, 115, 22, 0.15) 0%, rgba(234, 88, 12, 0.1) 100%);
+    color: #F97316;
+    padding: 0.35rem 0.75rem;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    border: 1px solid rgba(249, 115, 22, 0.2);
+}
+
+.dark .badge-active {
+    background: linear-gradient(135deg, rgba(249, 115, 22, 0.2) 0%, rgba(234, 88, 12, 0.15) 100%);
+    color: #FB923C;
+    border-color: rgba(249, 115, 22, 0.3);
+}
+
+/* Search container improvements */
+.app-search-container {
+    position: relative;
+    margin-bottom: 1rem;
+}
+
+.app-search-input {
+    width: 100%;
+    padding: 12px 12px 12px 44px;
+    border-radius: 14px;
+    border: 1.5px solid var(--accent-light);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    outline: none;
+    transition: all 0.25s ease;
+}
+
+.app-search-input:focus {
+    border-color: #F97316;
+    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
+}
+
+.app-search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-secondary);
 }

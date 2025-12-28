@@ -85,17 +85,22 @@ export const ProductProvider = ({ children }) => {
                     setProductMap(currentProductMap);
                 }
 
-                // 2. NUEVO: Cargar Emisiones desde mock
+                // 2. NUEVO: Cargar Emisiones (DB + Mock)
                 const { data: emissionsData } = await fetchEmissions(organizationId);
+                const mockPricesForEmissions = loadFromStorage('mock_prices', []);
 
-                if (emissionsData) {
+                let emissionNames = ['Unidad', 'Caja'];
+
+                if (emissionsData && emissionsData.length > 0) {
                     setRawEmissions(emissionsData);
-                    // Aseguramos que 'Unidad' esté al principio
-                    const names = ['Unidad', ...emissionsData.map(e => e.name).filter(n => n !== 'Unidad')];
-                    setEmissionOptions(names);
-                } else {
-                    setEmissionOptions(['Unidad', 'Caja']);
+                    emissionNames = ['Unidad', ...emissionsData.map(e => e.name).filter(n => n !== 'Unidad')];
+                } else if (mockPricesForEmissions.length > 0) {
+                    // Discover emissions from mock prices
+                    const discovered = Array.from(new Set(mockPricesForEmissions.map(p => p.emission)));
+                    emissionNames = ['Unidad', ...discovered.filter(n => n !== 'Unidad')];
                 }
+
+                setEmissionOptions(emissionNames);
 
                 // Cargar Subtipos
                 const { data: settings } = await fetchSettings(organizationId);
@@ -105,32 +110,45 @@ export const ProductProvider = ({ children }) => {
                     else setSubtypes(['Botella', 'Botella Tercio', 'Lata Pequeña', 'Lata Grande']);
                 }
 
-                // 3. Inventory (Uses product_id)
-                const { data: inv } = await fetchInventory(organizationId);
-                if (Array.isArray(inv)) {
-                    const invMap = {};
-                    inv.forEach(item => {
+                // 3. Inventory
+                const { data: dbInv } = await fetchInventory(organizationId);
+                const mockInv = loadFromStorage('mock_inventory', {});
+                const invMap = { ...mockInv }; // Start with mock
+
+                if (Array.isArray(dbInv)) {
+                    dbInv.forEach(item => {
                         const productName = currentIdMap[item.product_id];
                         if (productName) {
                             invMap[`${productName}_${item.subtype}`] = item.quantity;
                         }
                     });
-                    setInventory(invMap);
                 }
+                setInventory(invMap);
 
                 // 4. Prices
-                const { data: pr } = await fetchPrices(organizationId);
-                if (Array.isArray(pr)) {
-                    const priceMap = {};
-                    pr.forEach(p => {
+                const { data: dbPrices } = await fetchPrices(organizationId);
+                const mockPrices = loadFromStorage('mock_prices', []);
+                const priceMap = {};
+
+                // Load Mock Prices first
+                if (Array.isArray(mockPrices)) {
+                    mockPrices.forEach(p => {
+                        const suffix = p.is_local ? '_local' : '';
+                        priceMap[`${p.product_name}_${p.emission}_${p.subtype}${suffix}`] = Number(p.price);
+                    });
+                }
+
+                // Override with DB Prices if they exist
+                if (Array.isArray(dbPrices)) {
+                    dbPrices.forEach(p => {
                         const productName = currentIdMap[p.product_id];
                         if (productName) {
                             const suffix = p.is_local ? '_local' : '';
-                            priceMap[`${productName}_${p.emission}_${p.subtype}${suffix}`] = Number(p.price);
+                            priceMap[`${productName}_${p.p_emission || p.emission}_${p.subtype}${suffix}`] = Number(p.price);
                         }
                     });
-                    setPrices(priceMap);
                 }
+                setPrices(priceMap);
 
                 // 5. Conversions
                 const convMap = {};
@@ -169,10 +187,24 @@ export const ProductProvider = ({ children }) => {
     // --- DEV ONLY: Expose setters for DevTools ---
     useEffect(() => {
         window.__DEV_SET_INVENTORY__ = setInventory;
+        window.__DEV_SET_BEER_TYPES__ = setBeerTypes;
+        window.__DEV_SET_BEER_COLORS__ = setBeerColors;
+        window.__DEV_SET_RAW_EMISSIONS__ = setRawEmissions;
+        window.__DEV_SET_EMISSION_OPTIONS__ = setEmissionOptions;
+        window.__DEV_SET_SUBTYPES__ = setSubtypes;
+        window.__DEV_SET_PRICES__ = setPrices;
+        window.__DEV_SET_COST_PRICES__ = setCostPrices;
         window.__DEV_SET_INV_HISTORY__ = setInventoryHistory;
         window.__DEV_SET_WASTE_HISTORY__ = setBreakageHistory;
         return () => {
             delete window.__DEV_SET_INVENTORY__;
+            delete window.__DEV_SET_BEER_TYPES__;
+            delete window.__DEV_SET_BEER_COLORS__;
+            delete window.__DEV_SET_RAW_EMISSIONS__;
+            delete window.__DEV_SET_EMISSION_OPTIONS__;
+            delete window.__DEV_SET_SUBTYPES__;
+            delete window.__DEV_SET_PRICES__;
+            delete window.__DEV_SET_COST_PRICES__;
             delete window.__DEV_SET_INV_HISTORY__;
             delete window.__DEV_SET_WASTE_HISTORY__;
         };
@@ -254,16 +286,26 @@ export const ProductProvider = ({ children }) => {
     const addBeerType = async (name, color) => {
         if (!organizationId) throw new Error("No estás conectado a una organización.");
         if (!beerTypes.includes(name)) {
+            console.log('[addBeerType] Creating product:', { name, color, organization_id: organizationId });
+
             const { data, error } = await createProduct({ name, color, organization_id: organizationId });
 
-            if (error) throw error;
+            if (error) {
+                console.error('[addBeerType] Supabase Error:', error);
+                throw new Error(error.message || 'Error al crear el producto en la base de datos');
+            }
+
             if (data) {
+                console.log('[addBeerType] Product created successfully:', data);
                 setBeerTypes(prev => [...prev, name]);
                 setProductMap(prev => ({ ...prev, [name]: data.id }));
                 if (color) setBeerColors(prev => ({ ...prev, [name]: color }));
+            } else {
+                console.warn('[addBeerType] No data returned but no error either');
             }
+        } else {
+            console.log('[addBeerType] Product already exists:', name);
         }
-        // TODO: Sync with DB (createProduct)
     };
 
     const updateBeerColor = async (name, color) => {
@@ -420,25 +462,27 @@ export const ProductProvider = ({ children }) => {
 
     // Load costs initially
     useEffect(() => {
-        if (!organizationId || Object.keys(productMap).length === 0) return;
+        if (!organizationId) return;
 
         const storedCosts = loadFromStorage('mock_cost_prices', []);
-        if (storedCosts && storedCosts.length > 0) {
-            const costMap = {};
-            // Reverse product map locally for lookup
-            const idToName = {};
-            Object.entries(productMap).forEach(([name, id]) => {
-                idToName[id] = name;
-            });
 
+        // 1. Map from DB if possible
+        const costMap = {};
+        const idToName = {};
+        Object.entries(productMap || {}).forEach(([name, id]) => {
+            idToName[id] = name;
+        });
+
+        // 2. Load Mock Costs
+        if (storedCosts && Array.isArray(storedCosts)) {
             storedCosts.forEach(c => {
-                const name = idToName[c.product_id] || c.product_name; // Fallback to name if ID mapping fails
+                const name = idToName[c.product_id] || c.product_name;
                 if (name) {
                     costMap[`${name}_${c.emission}_${c.subtype}`] = Number(c.cost);
                 }
             });
-            setCostPrices(costMap);
         }
+        setCostPrices(costMap);
     }, [organizationId, productMap]); // Dependency on productMap ensures we have mapping ready
 
     const updateCostPrice = async (beer, emission, subtype, cost) => {
