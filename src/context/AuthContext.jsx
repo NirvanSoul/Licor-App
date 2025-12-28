@@ -9,6 +9,8 @@ export function AuthProvider({ children }) {
     const [organizationId, setOrganizationId] = useState(null);
     const [organizationName, setOrganizationName] = useState(null);
     const [isLicenseActive, setIsLicenseActive] = useState(true); // Default to true to prevent flickering, then check
+    const [planType, setPlanType] = useState(null); // 'free', 'monthly', 'yearly'
+    const [licenseExpiresAt, setLicenseExpiresAt] = useState(null);
     const [loading, setLoading] = useState(true);
 
     // Initial Session Check
@@ -60,7 +62,7 @@ export function AuthProvider({ children }) {
                 if (profile.organization_id) {
                     const { data: org, error: orgError } = await supabase
                         .from('organizations')
-                        .select('name, is_active, license_expires_at')
+                        .select('name, is_active, license_expires_at, plan_type')
                         .eq('id', profile.organization_id)
                         .single();
 
@@ -68,6 +70,8 @@ export function AuthProvider({ children }) {
 
                     if (!orgError && org) {
                         setOrganizationName(org.name);
+                        setPlanType(org.plan_type);
+                        setLicenseExpiresAt(org.license_expires_at);
 
                         // Check if license is active AND not expired
                         const isActive = org.is_active === true;
@@ -78,6 +82,8 @@ export function AuthProvider({ children }) {
                     } else {
                         console.error('Error fetching org name:', orgError);
                         setOrganizationName('Desconocida');
+                        setPlanType(null);
+                        setLicenseExpiresAt(null);
                         setIsLicenseActive(isDev);
                     }
                 } else {
@@ -141,6 +147,8 @@ export function AuthProvider({ children }) {
         resetPassword,
         updatePassword,
         isLicenseActive,
+        planType,
+        licenseExpiresAt,
         refreshLicense: async (forcedValue = null) => {
             const isDev = role?.toUpperCase() === 'DEVELOPER';
             if (isDev) {
@@ -153,12 +161,14 @@ export function AuthProvider({ children }) {
                 return;
             }
             if (organizationId) {
-                const { data, error } = await supabase.from('organizations').select('is_active, license_expires_at').eq('id', organizationId).single();
+                const { data, error } = await supabase.from('organizations').select('is_active, license_expires_at, plan_type').eq('id', organizationId).single();
                 if (!error && data) {
                     const isActive = data.is_active === true;
                     const expiryDate = data.license_expires_at ? new Date(data.license_expires_at) : null;
                     const isExpired = expiryDate ? expiryDate < new Date() : false;
                     setIsLicenseActive(isActive && !isExpired);
+                    setPlanType(data.plan_type);
+                    setLicenseExpiresAt(data.license_expires_at);
                 }
             } else {
                 setIsLicenseActive(false);

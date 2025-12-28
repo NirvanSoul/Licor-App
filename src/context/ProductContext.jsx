@@ -475,8 +475,32 @@ export const ProductProvider = ({ children }) => {
     };
 
     const getCostPrice = (beer, emission, subtype) => {
+        // 1. Primero intentar obtener el costo exacto para esta emisión
         const key = `${beer}_${emission}_${subtype}`;
-        return costPrices[key] || 0;
+        const exactCost = costPrices[key];
+        if (exactCost && exactCost > 0) {
+            return exactCost;
+        }
+
+        // 2. Si no existe, calcular costo proporcional basado en el mejor costo disponible
+        // Priority: Caja -> Media Caja -> Six Pack -> Unidad
+        const emissionsToCheck = ['Caja', 'Media Caja', 'Six Pack', 'Unidad'];
+
+        for (const em of emissionsToCheck) {
+            const checkKey = `${beer}_${em}_${subtype}`;
+            const storedCost = costPrices[checkKey];
+            if (storedCost && storedCost > 0) {
+                // Calcular costo por unidad desde la emisión encontrada
+                const storedUnits = getUnitsPerEmission(em, subtype);
+                const unitCost = storedCost / storedUnits;
+
+                // Multiplicar por las unidades de la emisión solicitada
+                const requestedUnits = getUnitsPerEmission(emission, subtype);
+                return unitCost * requestedUnits;
+            }
+        }
+
+        return 0;
     };
 
     // Helper to get the best "Unit Cost" for calculations

@@ -2,6 +2,7 @@ import React from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { ShoppingBag, Receipt, ClipboardList, Settings, Shield } from 'lucide-react';
 import InventoryFab from '../components/InventoryFab';
+import FreeTrialReminder from '../components/FreeTrialReminder';
 import { useAuth } from '../context/AuthContext';
 import './MainLayout.css';
 
@@ -130,7 +131,10 @@ export default function MainLayout() {
                         </div>
                     </div>
                 ) : (
-                    <Outlet />
+                    <>
+                        <FreeTrialReminder />
+                        <Outlet />
+                    </>
                 )}
             </main>
 

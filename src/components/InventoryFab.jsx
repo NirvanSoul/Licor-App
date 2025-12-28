@@ -235,6 +235,27 @@ export default function InventoryFab() {
                             })}
                         </div>
 
+                        {/* Resumen de Inversión Total */}
+                        <div style={{
+                            background: 'rgba(16, 185, 129, 0.1)',
+                            border: '1px solid rgba(16, 185, 129, 0.2)',
+                            borderRadius: '12px',
+                            padding: '12px',
+                            marginBottom: '1rem',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                        }}>
+                            <span style={{ fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                                Inversión Total:
+                            </span>
+                            <span style={{ fontWeight: 800, color: '#10b981', fontSize: '1.1rem' }}>
+                                ${Object.entries(pendingInventory).reduce((sum, [key, qty]) => {
+                                    return sum + ((costInputs[key] || 0) * qty);
+                                }, 0).toFixed(2)}
+                            </span>
+                        </div>
+
                         <div style={{ display: 'flex', gap: '10px' }}>
                             <button
                                 onClick={() => setShowCostModal(false)}
