@@ -261,6 +261,18 @@ export default function SalesPage() {
 
     const [showModal, setShowModal] = useState(false);
 
+    // Auto-scroll to inputs when step changes (Keyboard fix)
+    useEffect(() => {
+        if (ticketStep === 2) {
+            setTimeout(() => {
+                const input = document.querySelector('.ticket-input-large');
+                if (input) {
+                    input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 400);
+        }
+    }, [ticketStep]);
+
     // --- HANDLERS ---
 
     const handleConsumptionSelect = (mode) => {

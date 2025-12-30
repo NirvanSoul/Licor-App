@@ -386,34 +386,33 @@ h2.card-title {
 .td-cell {
     color: var(--text-primary);
     font-size: 0.8rem;
-    /* Removed flex: 1 and max-width: 0 */
     white-space: nowrap;
     overflow: hidden;
 }
 
-/* Unified Table Text Sizes */
+/* Unified Table Text Sizes & Colors */
 .customer-name {
     font-size: 0.6rem;
-    /* AQUI ESTA EL TAMAÑO DE LETRA DEL NOMBRE DEL CLIENTE */
-    color: var(--text-primary);
+    color: var(--text-primary) !important;
+    font-weight: 500;
 }
 
 .date-text,
-.user-name,
-.consumption-cell {
+.user-name {
     font-size: 0.75rem;
-    color: var(--text-primary);
+    color: var(--text-primary) !important;
 }
 
 .ticket-number {
     font-family: 'Poppins', sans-serif;
     font-size: 0.88rem;
     color: var(--text-secondary);
+    font-weight: 500;
 }
 
 .consumption-cell {
     color: var(--text-secondary);
-    /* Keep secondary color for consumption items in body */
+    /* Default to secondary */
     max-width: 18ch;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -422,7 +421,7 @@ h2.card-title {
 
 /* Ensure headers remain primary color */
 .th-cell.consumption-cell {
-    color: var(--text-primary);
+    color: var(--text-primary) !important;
 }
 
 @media (max-width: 768px) {
@@ -572,6 +571,12 @@ h2.card-title {
     white-space: nowrap;
 }
 
+.time-text {
+    font-size: 0.7rem;
+    color: var(--text-primary);
+    opacity: 0.7;
+}
+
 .table-footer {
     display: flex;
     justify-content: space-between;
@@ -583,6 +588,12 @@ h2.card-title {
 
 .dark .table-footer {
     background: rgba(255, 255, 255, 0.02);
+}
+
+.dark .badge-payment {
+    background: rgba(255, 255, 255, 0.1);
+    /* Lighter background for dark mode */
+    color: var(--text-primary);
 }
 
 /* User Badge */

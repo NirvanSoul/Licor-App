@@ -291,7 +291,7 @@
     }
 
     .main-content {
-        padding-bottom: 100px;
+        padding-bottom: 50vh;
         padding-left: 1rem;
         /* Reduce side padding on mobile content too */
         padding-right: 1rem;

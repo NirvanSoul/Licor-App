@@ -28,10 +28,10 @@ export const OrderProvider = ({ children }) => {
                     setPendingOrders(openOrders.map(o => ({
                         ...o,
                         id: o.id,
-                        ticketNumber: o.ticket_number,
-                        customerName: o.customer_name,
+                        ticketNumber: o.ticket_number || '0000',
+                        customerName: o.customer_name || 'Anónimo',
                         createdAt: o.created_at,
-                        createdBy: o.created_by
+                        createdBy: o.created_by || 'Sistema'
                     })));
                 }
 
@@ -55,10 +55,10 @@ export const OrderProvider = ({ children }) => {
                 if (payload.eventType === 'INSERT') {
                     const newOrder = {
                         ...payload.new,
-                        ticketNumber: payload.new.ticket_number,
-                        customerName: payload.new.customer_name,
+                        ticketNumber: payload.new.ticket_number || '0000',
+                        customerName: payload.new.customer_name || 'Anónimo',
                         createdAt: payload.new.created_at,
-                        createdBy: payload.new.created_by
+                        createdBy: payload.new.created_by || 'Sistema'
                     };
                     setPendingOrders(prev => {
                         if (prev.some(o => o.id === newOrder.id)) return prev;
@@ -70,10 +70,10 @@ export const OrderProvider = ({ children }) => {
                     } else {
                         const updatedOrder = {
                             ...payload.new,
-                            ticketNumber: payload.new.ticket_number,
-                            customerName: payload.new.customer_name,
+                            ticketNumber: payload.new.ticket_number || '0000',
+                            customerName: payload.new.customer_name || 'Anónimo',
                             createdAt: payload.new.created_at,
-                            createdBy: payload.new.created_by
+                            createdBy: payload.new.created_by || 'Sistema'
                         };
                         setPendingOrders(prev => prev.map(o => o.id === updatedOrder.id ? updatedOrder : o));
                     }
@@ -102,18 +102,18 @@ export const OrderProvider = ({ children }) => {
                         status: 'PAID',
                         items: (newSale.items || []).map(item => ({
                             ...item,
-                            name: item.product_name,
-                            beerType: item.product_name,
+                            name: item.product_name || item.name || 'Producto',
+                            beerType: item.product_name || item.beerType || 'Producto',
                             quantity: Number(item.quantity || 1),
                             price: Number(item.price || 0)
                         })),
-                        ticketNumber: newSale.ticket_number,
-                        customerName: newSale.customer_name,
+                        ticketNumber: newSale.ticket_number || '0000',
+                        customerName: newSale.customer_name || 'Anónimo',
                         totalAmountBs: Number(newSale.total_amount_bs || 0),
                         totalAmountUsd: Number(newSale.total_amount_usd || 0),
                         createdAt: newSale.created_at,
                         closedAt: newSale.closed_at || newSale.created_at,
-                        createdBy: newSale.created_by || 'Desconocido'
+                        createdBy: newSale.created_by || 'Sistema'
                     };
 
                     setPendingOrders(prev => {
@@ -160,18 +160,18 @@ export const OrderProvider = ({ children }) => {
                                 status: 'PAID',
                                 items: (sale.items || []).map(item => ({
                                     ...item,
-                                    name: item.product_name,
-                                    beerType: item.product_name,
+                                    name: item.product_name || item.name || 'Producto',
+                                    beerType: item.product_name || item.beerType || 'Producto',
                                     quantity: Number(item.quantity || 1),
                                     price: Number(item.price || 0)
                                 })),
-                                ticketNumber: sale.ticket_number,
-                                customerName: sale.customer_name,
+                                ticketNumber: sale.ticket_number || '0000',
+                                customerName: sale.customer_name || 'Anónimo',
                                 totalAmountBs: Number(sale.total_amount_bs || 0),
                                 totalAmountUsd: Number(sale.total_amount_usd || 0),
                                 createdAt: sale.created_at,
                                 closedAt: sale.closed_at || sale.created_at,
-                                createdBy: sale.created_by || 'Desconocido'
+                                createdBy: sale.created_by || 'Sistema'
                             }));
 
                             if (remoteSales.length === 0) return prev;
@@ -231,7 +231,7 @@ export const OrderProvider = ({ children }) => {
             type,
             payment_method: paymentMethod,
             reference,
-            created_by: user?.user_metadata?.name || user?.email || 'Desconocido',
+            created_by: user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || 'Desconocido',
             items: initialItems,
             payments: []
         };
@@ -586,7 +586,7 @@ export const OrderProvider = ({ children }) => {
             type: 'Llevar',
             paymentMethod,
             reference,
-            createdBy: user?.user_metadata?.name || user?.email || 'Desconocido',
+            createdBy: user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || 'Desconocido',
             createdAt: new Date().toISOString(),
             closedAt: new Date().toISOString(),
             items: optimizedItems,
@@ -620,18 +620,18 @@ export const OrderProvider = ({ children }) => {
                     status: 'PAID',
                     items: (data[0].items || items).map(item => ({
                         ...item,
-                        name: item.product_name || item.name,
-                        beerType: item.product_name || item.beerType,
+                        name: item.product_name || item.name || 'Producto',
+                        beerType: item.product_name || item.beerType || 'Producto',
                         quantity: Number(item.quantity || 1),
                         price: Number(item.price || 0)
                     })),
-                    customerName: data[0].customer_name,
-                    ticketNumber: data[0].ticket_number,
+                    customerName: data[0].customer_name || 'Anónimo',
+                    ticketNumber: data[0].ticket_number || '0000',
                     totalAmountBs: Number(data[0].total_amount_bs || totalBs),
                     totalAmountUsd: Number(data[0].total_amount_usd || totalUsd),
                     createdAt: data[0].created_at,
                     closedAt: data[0].closed_at || data[0].created_at,
-                    createdBy: data[0].created_by || 'Desconocido'
+                    createdBy: data[0].created_by || 'Sistema'
                 };
                 setPendingOrders(prev => [transformedDirectSale, ...prev.filter(o => o.id !== newOrder.id)]);
                 showNotification(`Venta Registrada en Caja`, 'success');

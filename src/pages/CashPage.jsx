@@ -788,18 +788,18 @@ export function CashPageContent() {
             {showProfitModal && (
                 <div className="report-modal-overlay" onClick={() => setShowReportModal(false)}>
                     <div className="report-modal-content weekly-modal-content" onClick={e => e.stopPropagation()}>
-                        <div className="report-modal-header weekly-modal-header">
-                            <div className="weekly-header-top">
-                                <h2 className="weekly-title">
+                        <div className="report-modal-header">
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
                                     Ganancias Netas
-                                </h2>
-                                <button className="close-btn" onClick={() => setShowProfitModal(false)}>
-                                    <X size={20} />
-                                </button>
+                                </h3>
+                                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                                    Semana Actual
+                                </span>
                             </div>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                                Semana Actual
-                            </div>
+                            <button className="close-btn" onClick={() => setShowProfitModal(false)}>
+                                <X size={24} />
+                            </button>
                         </div>
 
                         <div className="report-modal-body custom-scrollbar">
@@ -831,40 +831,19 @@ export function CashPageContent() {
                                         Total Facturado
                                     </div>
                                 </div>
-                                {/* COGS */}
-                                <div className="dashboard-card" style={{ background: 'rgba(128, 128, 128, 0.05)', border: '1px solid rgba(128, 128, 128, 0.1)', padding: '1rem' }}>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Costo Productos</div>
+                                {/* Inventory Cost (Moved and Renamed) */}
+                                <div className="dashboard-card" style={{ background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.1)', padding: '1rem' }}>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Costo de Inventario</div>
                                     <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#ef4444', marginTop: '4px' }}>
-                                        -{currencySymbol}{profitStats.weekCOGS.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                                    </div>
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '2px', opacity: 0.7 }}>
-                                        Inversión Vendida
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Inventory Asset */}
-                            <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '1rem', color: 'var(--text-primary)' }}>Capital en Bodega</h3>
-                            <div className="dashboard-card" style={{
-                                background: 'rgba(37, 99, 235, 0.08)',
-                                border: '1px solid rgba(37, 99, 235, 0.2)',
-                                padding: '1.25rem',
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center'
-                            }}>
-                                <div>
-                                    <div style={{ fontSize: '0.8rem', color: '#2563eb', fontWeight: 600 }}>Valor del Inventario</div>
-                                    <div style={{ fontSize: '0.7rem', color: '#2563eb', opacity: 0.8 }}>Costo total de stock actual</div>
-                                </div>
-                                <div style={{ textAlign: 'right' }}>
-                                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#2563eb' }}>
                                         {currencySymbol}{(profitStats?.inventoryValue || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                                     </div>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '2px', opacity: 0.7 }}>
+                                        Capital en Bodega
+                                    </div>
                                 </div>
                             </div>
 
-                            <div style={{ marginTop: '2rem', padding: '1rem', background: 'rgba(251, 146, 60, 0.1)', borderRadius: '8px', fontSize: '0.8rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
+                            <div style={{ marginTop: '2rem', padding: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)', textAlign: 'center', opacity: 0.8 }}>
                                 <AlertTriangle size={16} style={{ display: 'inline', marginBottom: '-3px', marginRight: '5px', color: '#f97316' }} />
                                 Para ver datos precisos, asegúrate de configurar los <strong>Precios de Costo</strong> en el Inventario.
                             </div>
@@ -965,7 +944,7 @@ export function CashPageContent() {
                                         </div>
                                         <div className="td-cell date-cell">
                                             <div className="date-text">{new Date(sale.closedAt).toLocaleDateString()}</div>
-                                            <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>{new Date(sale.closedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                            <div className="time-text">{new Date(sale.closedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                                         </div>
                                         <div className="td-cell">
                                             <span className="badge-payment">
