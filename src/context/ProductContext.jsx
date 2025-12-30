@@ -8,7 +8,11 @@ import {
     fetchInventory, upsertInventory,
     fetchPrices, upsertPrice,
     fetchSettings, fetchEmissions, fetchSales, upsertEmission,
-    deleteProduct, deleteEmission
+    deleteProduct, deleteEmission,
+    fetchCostPrices, upsertCostPrice, upsertSetting,
+    fetchInventoryHistory, createInventoryHistory,
+    fetchWasteReports, createWasteReport,
+    resetDatabase
 } from '../services/api';
 
 const ProductContext = createContext();
@@ -19,33 +23,23 @@ export const ProductProvider = ({ children }) => {
     const { user, organizationId } = useAuth();
     const { showNotification } = useNotification();
 
-    // Helper to load from storage (Fallback)
-    const loadFromStorage = (key, fallback) => {
-        try {
-            const stored = localStorage.getItem(key);
-            return stored ? JSON.parse(stored) : fallback;
-        } catch (e) {
-            console.error(`Error loading ${key}`, e);
-            return fallback;
-        }
-    };
-
-    // State Declarations
+    // --- MAIN CURRENCY & STATE ---
+    const [mainCurrency, setMainCurrency] = useState('USD');
     const [beerTypes, setBeerTypes] = useState([]);
     const [beerColors, setBeerColors] = useState({});
-    const [productMap, setProductMap] = useState({}); // Name -> ID
-
-    // --- NUEVO: Estado para emisiones CRUD ---
-    const [rawEmissions, setRawEmissions] = useState([]); // Objetos {id, name, units}
-    const [emissionOptions, setEmissionOptions] = useState([]); // Solo Nombres (para compatibilidad UI)
-
-    const [subtypes, setSubtypes] = useState([]);
+    const [productMap, setProductMap] = useState({});
+    const [rawEmissions, setRawEmissions] = useState([]);
+    const [emissionOptions, setEmissionOptions] = useState(['Unidad', 'Caja', 'Media Caja']);
+    const [subtypes, setSubtypes] = useState(['Botella', 'Botella Tercio', 'Lata Pequeña', 'Lata Grande']);
     const [prices, setPrices] = useState({});
-    const [conversions, setConversions] = useState({});
     const [inventory, setInventory] = useState({});
-
-    // --- MAIN CURRENCY ---
-    const [mainCurrency, setMainCurrency] = useState(() => localStorage.getItem('mainCurrency') || 'USD');
+    const [conversions, setConversions] = useState({});
+    const [exchangeRates, setExchangeRates] = useState({ bcv: 0, custom: 0, euro: 0, history: [], lastUpdate: null });
+    const [costPrices, setCostPrices] = useState({});
+    const [inventoryHistory, setInventoryHistory] = useState([]);
+    const [breakageHistory, setBreakageHistory] = useState([]);
+    const [pendingInventory, setPendingInventory] = useState({});
+    const [pendingWaste, setPendingWaste] = useState({});
 
     const getCurrencySymbol = (mode) => {
         if (mode === 'USD') return '$';
@@ -55,11 +49,6 @@ export const ProductProvider = ({ children }) => {
     };
 
     const currencySymbol = getCurrencySymbol(mainCurrency);
-
-    // Persist Main Currency
-    useEffect(() => {
-        localStorage.setItem('mainCurrency', mainCurrency);
-    }, [mainCurrency]);
 
     // --- MOCK DATA SYNC ---
     useEffect(() => {
@@ -85,36 +74,39 @@ export const ProductProvider = ({ children }) => {
                     setProductMap(currentProductMap);
                 }
 
-                // 2. NUEVO: Cargar Emisiones (DB + Mock)
-                const { data: emissionsData } = await fetchEmissions(organizationId);
-                const mockPricesForEmissions = loadFromStorage('mock_prices', []);
-
-                let emissionNames = ['Unidad', 'Caja'];
-
-                if (emissionsData && emissionsData.length > 0) {
-                    setRawEmissions(emissionsData);
-                    emissionNames = ['Unidad', ...emissionsData.map(e => e.name).filter(n => n !== 'Unidad')];
-                } else if (mockPricesForEmissions.length > 0) {
-                    // Discover emissions from mock prices
-                    const discovered = Array.from(new Set(mockPricesForEmissions.map(p => p.emission)));
-                    emissionNames = ['Unidad', ...discovered.filter(n => n !== 'Unidad')];
-                }
-
-                setEmissionOptions(emissionNames);
-
-                // Cargar Subtipos
+                // 2. Settings (Currency, Subtypes, Exchange Rates)
                 const { data: settings } = await fetchSettings(organizationId);
                 if (settings) {
+                    const mainCurrencySetting = settings.find(s => s.key === 'mainCurrency');
+                    if (mainCurrencySetting) setMainCurrency(mainCurrencySetting.value);
+
+                    const exchangeRatesSetting = settings.find(s => s.key === 'exchangeRates');
+                    if (exchangeRatesSetting) {
+                        setExchangeRates(exchangeRatesSetting.value);
+                    } else {
+                        // Trigger initial fetch if none in DB
+                        fetchRates();
+                    }
+
                     const subtypesSetting = settings.find(s => s.key === 'subtypes');
                     if (subtypesSetting) setSubtypes(subtypesSetting.value);
                     else setSubtypes(['Botella', 'Botella Tercio', 'Lata Pequeña', 'Lata Grande']);
+                } else {
+                    fetchRates(); // Initial fetch
                 }
 
-                // 3. Inventory
-                const { data: dbInv } = await fetchInventory(organizationId);
-                const mockInv = loadFromStorage('mock_inventory', {});
-                const invMap = { ...mockInv }; // Start with mock
+                // 3. Emisiones
+                const { data: emissionsData } = await fetchEmissions(organizationId);
+                let emissionNames = ['Unidad', 'Caja'];
+                if (emissionsData && emissionsData.length > 0) {
+                    setRawEmissions(emissionsData);
+                    emissionNames = ['Unidad', ...emissionsData.map(e => e.name).filter(n => n !== 'Unidad')];
+                }
+                setEmissionOptions(emissionNames);
 
+                // 4. Inventory
+                const { data: dbInv } = await fetchInventory(organizationId);
+                const invMap = {};
                 if (Array.isArray(dbInv)) {
                     dbInv.forEach(item => {
                         const productName = currentIdMap[item.product_id];
@@ -125,20 +117,9 @@ export const ProductProvider = ({ children }) => {
                 }
                 setInventory(invMap);
 
-                // 4. Prices
+                // 5. Prices
                 const { data: dbPrices } = await fetchPrices(organizationId);
-                const mockPrices = loadFromStorage('mock_prices', []);
                 const priceMap = {};
-
-                // Load Mock Prices first
-                if (Array.isArray(mockPrices)) {
-                    mockPrices.forEach(p => {
-                        const suffix = p.is_local ? '_local' : '';
-                        priceMap[`${p.product_name}_${p.emission}_${p.subtype}${suffix}`] = Number(p.price);
-                    });
-                }
-
-                // Override with DB Prices if they exist
                 if (Array.isArray(dbPrices)) {
                     dbPrices.forEach(p => {
                         const productName = currentIdMap[p.product_id];
@@ -150,10 +131,21 @@ export const ProductProvider = ({ children }) => {
                 }
                 setPrices(priceMap);
 
-                // 5. Conversions
-                const convMap = {};
+                // 6. Cost Prices
+                const { data: dbCosts } = await fetchCostPrices(organizationId);
+                const costMap = {};
+                if (Array.isArray(dbCosts)) {
+                    dbCosts.forEach(c => {
+                        const productName = currentIdMap[c.product_id];
+                        if (productName) {
+                            costMap[`${productName}_${c.emission}_${c.subtype}`] = Number(c.cost);
+                        }
+                    });
+                }
+                setCostPrices(costMap);
 
-                // A. Real data from Supabase (emission_types)
+                // 7. Conversions
+                const convMap = {};
                 if (emissionsData && Array.isArray(emissionsData)) {
                     emissionsData.forEach(e => {
                         if (e.name && e.subtype && e.units) {
@@ -161,19 +153,14 @@ export const ProductProvider = ({ children }) => {
                         }
                     });
                 }
-
-                // B. Fallback/Sync with Mock local storage
-                const storedConversions = loadFromStorage('mock_conversions', []);
-                if (Array.isArray(storedConversions)) {
-                    storedConversions.forEach(c => {
-                        const key = `${c.emission}_${c.subtype}`;
-                        // If not already in map (prefer DB), or if DB was empty
-                        if (!convMap[key]) {
-                            convMap[key] = c.units;
-                        }
-                    });
-                }
                 setConversions(convMap);
+
+                // 8. History (Inventory & Waste)
+                const { data: invHist } = await fetchInventoryHistory(organizationId);
+                if (invHist) setInventoryHistory(invHist.slice(0, 50));
+
+                const { data: wasteHist } = await fetchWasteReports(organizationId);
+                if (wasteHist) setBreakageHistory(wasteHist.slice(0, 50));
 
             } catch (error) {
                 console.error("Error fetching initial data:", error);
@@ -273,6 +260,24 @@ export const ProductProvider = ({ children }) => {
                 } else if (payload.eventType === 'DELETE') {
                     // Update rawEmissions
                     setRawEmissions(prev => prev.filter(e => e.id !== payload.old.id));
+                }
+            })
+            // COST PRICES
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'cost_prices', filter: `organization_id=eq.${organizationId}` }, (payload) => {
+                const findProductName = (id) => Object.keys(productMap).find(name => productMap[name] === id);
+                if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                    const name = findProductName(payload.new.product_id);
+                    if (name) {
+                        setCostPrices(prev => ({ ...prev, [`${name}_${payload.new.emission}_${payload.new.subtype}`]: Number(payload.new.cost) }));
+                    }
+                }
+            })
+            // ORGANIZATION SETTINGS
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'organization_settings', filter: `organization_id=eq.${organizationId}` }, (payload) => {
+                if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                    if (payload.new.key === 'mainCurrency') setMainCurrency(payload.new.value);
+                    if (payload.new.key === 'exchangeRates') setExchangeRates(payload.new.value);
+                    if (payload.new.key === 'subtypes') setSubtypes(payload.new.value);
                 }
             })
             .subscribe();
@@ -375,7 +380,7 @@ export const ProductProvider = ({ children }) => {
                     setEmissionOptions(prev => [...prev, name]);
                 }
 
-                localStorage.setItem('mock_emissions', JSON.stringify(updated));
+                // Sync with DB is priority
                 return { success: true };
             } catch (error) {
                 console.error("Error creating emission:", error);
@@ -404,7 +409,6 @@ export const ProductProvider = ({ children }) => {
                 setEmissionOptions(prev => prev.filter(e => e !== name));
             }
 
-            localStorage.setItem('mock_emissions', JSON.stringify(updated));
 
             // Delete from DB
             if (itemToDelete && itemToDelete.id) {
@@ -458,32 +462,6 @@ export const ProductProvider = ({ children }) => {
     }, [rawEmissions, beerTypes]);
 
     // --- COST & NET PROFIT MANAGEMENT ---
-    const [costPrices, setCostPrices] = useState({});
-
-    // Load costs initially
-    useEffect(() => {
-        if (!organizationId) return;
-
-        const storedCosts = loadFromStorage('mock_cost_prices', []);
-
-        // 1. Map from DB if possible
-        const costMap = {};
-        const idToName = {};
-        Object.entries(productMap || {}).forEach(([name, id]) => {
-            idToName[id] = name;
-        });
-
-        // 2. Load Mock Costs
-        if (storedCosts && Array.isArray(storedCosts)) {
-            storedCosts.forEach(c => {
-                const name = idToName[c.product_id] || c.product_name;
-                if (name) {
-                    costMap[`${name}_${c.emission}_${c.subtype}`] = Number(c.cost);
-                }
-            });
-        }
-        setCostPrices(costMap);
-    }, [organizationId, productMap]); // Dependency on productMap ensures we have mapping ready
 
     const updateCostPrice = async (beer, emission, subtype, cost) => {
         const key = `${beer}_${emission}_${subtype}`;
@@ -491,30 +469,14 @@ export const ProductProvider = ({ children }) => {
         setCostPrices(prev => ({ ...prev, [key]: newCost }));
 
         const productId = productMap[beer];
-        if (productId) {
-            // Mock Upsert Cost
-            const costs = loadFromStorage('mock_cost_prices', []);
-            const existingIndex = costs.findIndex(c =>
-                c.product_id === productId &&
-                c.emission === emission &&
-                c.subtype === subtype
-            );
-
-            const costData = {
+        if (productId && organizationId) {
+            await upsertCostPrice({
                 organization_id: organizationId,
                 product_id: productId,
-                product_name: beer, // Store name for easier mock hydration
                 emission,
                 subtype,
                 cost: newCost
-            };
-
-            if (existingIndex >= 0) {
-                costs[existingIndex] = { ...costs[existingIndex], ...costData };
-            } else {
-                costs.push({ ...costData, id: Date.now().toString() });
-            }
-            localStorage.setItem('mock_cost_prices', JSON.stringify(costs));
+            });
         }
     };
 
@@ -607,58 +569,27 @@ export const ProductProvider = ({ children }) => {
         // showNotification(`Precio actualizado: ${beer} (${emission}) - $${newPrice}`, 'success');
 
         const productId = productMap[beer];
-        if (productId) {
+        if (productId && organizationId) {
             // Real Upsert to Database
-            if (organizationId) {
-                await upsertPrice({
-                    organization_id: organizationId,
-                    product_id: productId,
-                    emission,
-                    subtype,
-                    price: newPrice,
-                    is_local: isLocal
-                });
-            }
-
-            // Mock/Local Fallback
-            const localPrices = loadFromStorage('mock_prices', []);
-            const existingIndex = localPrices.findIndex(p =>
-                p.product_id === productId &&
-                p.emission === emission &&
-                p.subtype === subtype &&
-                p.is_local === isLocal
-            );
-
-            const priceData = {
+            await upsertPrice({
                 organization_id: organizationId,
                 product_id: productId,
                 emission,
                 subtype,
                 price: newPrice,
                 is_local: isLocal
-            };
-
-            if (existingIndex >= 0) {
-                localPrices[existingIndex] = { ...localPrices[existingIndex], ...priceData };
-            } else {
-                localPrices.push({ ...priceData, id: Date.now().toString() });
-            }
-            localStorage.setItem('mock_prices', JSON.stringify(localPrices));
+            });
         }
     };
 
     const getPrice = React.useCallback((beer, emission, subtype, mode = 'standard') => {
         const suffix = mode === 'local' ? '_local' : '';
         const key = `${beer}_${emission}_${subtype}${suffix}`;
-
         let price = prices[key];
-
-        // Fallback: If Local price is missing, try Standard
         if (mode === 'local' && (price === undefined || price === null)) {
             const standardKey = `${beer}_${emission}_${subtype}`;
             price = prices[standardKey];
         }
-
         return price || 0;
     }, [prices]);
 
@@ -667,7 +598,6 @@ export const ProductProvider = ({ children }) => {
         const newUnits = parseInt(units, 10);
         setConversions(prev => ({ ...prev, [key]: newUnits }));
 
-        // Real Upsert
         if (organizationId) {
             await upsertEmission({
                 organization_id: organizationId,
@@ -676,20 +606,6 @@ export const ProductProvider = ({ children }) => {
                 units: newUnits
             });
         }
-
-        // Mock cleanup/fallback
-        const conversionsStored = loadFromStorage('mock_conversions', []);
-        const existingIndexForConv = conversionsStored.findIndex(c =>
-            c.emission === emission && c.subtype === subtype
-        );
-        const convData = { organization_id: organizationId, emission, subtype, units: newUnits };
-
-        if (existingIndexForConv >= 0) {
-            conversionsStored[existingIndexForConv] = { ...conversionsStored[existingIndexForConv], ...convData };
-        } else {
-            conversionsStored.push({ ...convData, id: Date.now().toString() });
-        }
-        localStorage.setItem('mock_conversions', JSON.stringify(conversionsStored));
     };
 
     const getUnitsPerEmission = (emission, subtype) => {
@@ -700,43 +616,31 @@ export const ProductProvider = ({ children }) => {
         const conversionKey = `${emission}_${subtype}`;
         if (conversions[conversionKey]) return conversions[conversionKey];
 
-        // Find specific emission for this subtype (Case Insensitive Subtype)
         const dbEmission = rawEmissions.find(e =>
             e.name === emission &&
             (e.subtype === subtype || (e.subtype && subtype && e.subtype.toLowerCase() === subtype.toLowerCase()))
         );
         if (dbEmission && dbEmission.units) return dbEmission.units;
 
-        // Fallback to legacy (no subtype) or just name match if nothing else?
-        // If I defined "Combo" for "Botella", and I ask for "Combo" for "Botella", it matches above.
-        // What if I request "Combo" but the emission has no subtype defined (global)?
         const legacy = rawEmissions.find(e => e.name === emission && !e.subtype);
         if (legacy && legacy.units) return legacy.units;
 
         if (emission === 'Caja') {
             if (subtype && subtype.toLowerCase().includes('lata')) return 24;
-            if (subtype === 'Botella Tercio') return 24; // User requested 24 for Tercio
+            if (subtype === 'Botella Tercio') return 24;
             return 36;
         }
         if (emission === 'Media Caja') {
             if (subtype && subtype.toLowerCase().includes('lata')) return 12;
-            if (subtype === 'Botella Tercio') return 12; // User requested 12 for Tercio
+            if (subtype === 'Botella Tercio') return 12;
             return 18;
         }
         return 1;
     };
 
     // --- EXCHANGE RATES ---
-    const [exchangeRates, setExchangeRates] = useState(() => {
-        const stored = loadFromStorage('exchangeRates', { bcv: 0, custom: 0, euro: 0, history: [], lastUpdate: null });
-        // Sanitize NaN from storage
-        if (stored && isNaN(stored.custom)) {
-            stored.custom = 0;
-        }
-        return stored;
-    });
 
-    const updateCustomRate = (value) => {
+    const updateCustomRate = async (value) => {
         const rawValue = value.toString().replace(/,/g, '');
         if (rawValue === '') {
             setExchangeRates(prev => ({ ...prev, custom: 0 }));
@@ -744,21 +648,21 @@ export const ProductProvider = ({ children }) => {
         }
         const newVal = parseFloat(rawValue);
         if (isNaN(newVal)) return;
-        setExchangeRates(prev => {
-            const updated = { ...prev, custom: newVal };
-            localStorage.setItem('exchangeRates', JSON.stringify(updated));
-            return updated;
-        });
+
+        const updated = { ...exchangeRates, custom: newVal };
+        setExchangeRates(updated);
+
+        if (organizationId) {
+            await upsertSetting(organizationId, 'exchangeRates', updated);
+        }
     };
 
-    // --- AUTO-UPDATE RATES ON LOAD ---
     useEffect(() => {
         fetchRates();
     }, []);
 
     const fetchRates = async () => {
         try {
-            // We keep using dolarapi for USD as per existing logic, and add dolarvzla for Euro & History
             const [bcvRes, euroRes, historyRes] = await Promise.allSettled([
                 fetch('https://ve.dolarapi.com/v1/dolares/oficial'),
                 fetch('https://api.dolarvzla.com/public/exchange-rate'),
@@ -766,86 +670,49 @@ export const ProductProvider = ({ children }) => {
             ]);
 
             let bcv = 0;
-            let parallel = 0;
             let euro = 0;
             let history = [];
-            let nextRates = null; // { date, usd, eur }
+            let nextRates = null;
 
-
-            // 2. Official (BCV & Euro) from DolarVzla (Logic for Weekend/Future Rates)
             if (euroRes.status === 'fulfilled') {
                 const data = await euroRes.value.json();
-                // data: { current: { date: "2025-12-22", usd, eur }, previous: { date: "2025-12-19", usd, eur } }
-
                 if (data?.current && data?.previous) {
-                    const todayStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD Localish (UTC actually)
-                    // Better to use user timezone or just compare simple strings if we trust the API date format.
-                    // The API returns YYYY-MM-DD.
-                    // Let's ensure we get the correct "today" for Venezuela/User.
                     const now = new Date();
-                    const year = now.getFullYear();
-                    const month = String(now.getMonth() + 1).padStart(2, '0');
-                    const day = String(now.getDate()).padStart(2, '0');
-                    const localToday = `${year}-${month}-${day}`;
-
+                    const localToday = now.toISOString().split('T')[0];
                     if (data.current.date > localToday) {
-                        // Future Rate detected (e.g. It's Sunday, date is Monday)
-                        // Use PREVIOUS as Effective
                         bcv = data.previous.usd;
                         euro = data.previous.eur;
-                        nextRates = {
-                            date: data.current.date,
-                            usd: data.current.usd,
-                            eur: data.current.eur
-                        };
+                        nextRates = data.current;
                     } else {
-                        // Current is effective
                         bcv = data.current.usd;
                         euro = data.current.eur;
                     }
-                } else if (data?.current) {
-                    // Fallback if no previous
-                    bcv = data.current.usd;
-                    euro = data.current.eur;
                 }
+            }
 
-                // Fallback for BCV if DolarVzla fails but we have DolarApi result? 
-                // We previously fetched BCV from DolarApi. 
-                // Let's use DolarApi only if DolarVzla didn't give us a USD rate.
-                if (!bcv && bcvRes.status === 'fulfilled') {
-                    const bcvData = await bcvRes.value.json();
-                    if (bcvData && bcvData.promedio) bcv = bcvData.promedio;
-                }
-
-            } else {
-                console.error("Error fetching Official/Euro:", euroRes.reason);
-                // Fallback BCV
-                if (bcvRes.status === 'fulfilled') {
-                    const bcvData = await bcvRes.value.json();
-                    if (bcvData && bcvData.promedio) bcv = bcvData.promedio;
-                }
+            if (!bcv && bcvRes.status === 'fulfilled') {
+                const data = await bcvRes.value.json();
+                if (data && data.promedio) bcv = data.promedio;
             }
 
             if (historyRes.status === 'fulfilled') {
                 const data = await historyRes.value.json();
-                if (Array.isArray(data?.rates)) {
-                    history = data.rates.slice(0, 7);
-                }
+                if (Array.isArray(data?.rates)) history = data.rates.slice(0, 7);
             }
 
-            setExchangeRates(prev => {
-                const updated = {
-                    ...prev,
-                    bcv,
-                    euro,
-                    history,
-                    nextRates,
-                    lastUpdate: new Date().toLocaleString()
-                };
-                localStorage.setItem('exchangeRates', JSON.stringify(updated));
-                return updated;
-            });
+            const updated = {
+                ...exchangeRates,
+                bcv,
+                euro,
+                history,
+                nextRates,
+                lastUpdate: new Date().toLocaleString()
+            };
+            setExchangeRates(updated);
 
+            if (organizationId) {
+                await upsertSetting(organizationId, 'exchangeRates', updated);
+            }
         } catch (error) {
             console.error("Error fetching rates:", error);
         }
@@ -858,181 +725,124 @@ export const ProductProvider = ({ children }) => {
         return basePrice * currentRate;
     };
 
-    // --- INVENTORY MANAGEMENT (CORREGIDO) ---
-
+    // --- INVENTORY MANAGEMENT ---
     const addStock = async (beer, emission, subtype, quantity) => {
         const units = quantity * getUnitsPerEmission(emission, subtype);
         const key = `${beer}_${subtype}`;
-
-        const currentTotal = inventory[key] || 0;
-        const newTotal = currentTotal + units;
-
-        // 1. Actualizar UI
+        const newTotal = (inventory[key] || 0) + units;
         setInventory(prev => ({ ...prev, [key]: newTotal }));
 
-        // 2. Sync with DB
         const productId = productMap[beer];
         if (productId && organizationId) {
-            await upsertInventory({
-                organization_id: organizationId,
-                product_id: productId,
-                subtype,
-                quantity: newTotal
-            });
+            await upsertInventory({ organization_id: organizationId, product_id: productId, subtype, quantity: newTotal });
         }
     };
 
     const deductStock = async (beer, emission, subtype, quantity) => {
         const units = quantity * getUnitsPerEmission(emission, subtype);
         const key = `${beer}_${subtype}`;
-
-        const currentTotal = inventory[key] || 0;
-        const newTotal = Math.max(0, currentTotal - units);
-
+        const newTotal = Math.max(0, (inventory[key] || 0) - units);
         setInventory(prev => ({ ...prev, [key]: newTotal }));
 
-        // 2. Sync with DB
         const productId = productMap[beer];
         if (productId && organizationId) {
-            await upsertInventory({
-                organization_id: organizationId,
-                product_id: productId,
-                subtype,
-                quantity: newTotal
-            });
+            await upsertInventory({ organization_id: organizationId, product_id: productId, subtype, quantity: newTotal });
         }
     };
 
     const setBaseStock = async (beer, subtype, units) => {
         const key = `${beer}_${subtype}`;
-
         setInventory(prev => ({ ...prev, [key]: units }));
 
-        // 2. Sync with DB
         const productId = productMap[beer];
         if (productId && organizationId) {
-            await upsertInventory({
-                organization_id: organizationId,
-                product_id: productId,
-                subtype,
-                quantity: units
-            });
+            await upsertInventory({ organization_id: organizationId, product_id: productId, subtype, quantity: units });
         }
     };
 
     const checkStock = (beer, emission, subtype, quantity) => {
         const key = `${beer}_${subtype}`;
-        const available = inventory[key] || 0;
         const required = quantity * getUnitsPerEmission(emission, subtype);
-        return available >= required;
+        return (inventory[key] || 0) >= required;
     };
 
-    const getInventory = (beer, subtype) => {
-        if (!beer || !subtype) return 0;
-        const key = `${beer}_${subtype}`;
-        return inventory[key] || 0;
-    };
+    const getInventory = (beer, subtype) => inventory[`${beer}_${subtype}`] || 0;
 
     const checkAggregateStock = (emission, subtype, requiredQuantity) => {
-        // Calculate the TOTAL stock available across ALL beers for this subtype.
-        const totalAvailable = beerTypes.reduce((acc, beer) => {
-            const key = `${beer}_${subtype}`;
-            return acc + (inventory[key] || 0);
-        }, 0);
-
+        const totalAvailable = beerTypes.reduce((acc, beer) => acc + (inventory[`${beer}_${subtype}`] || 0), 0);
         const requiredUnits = requiredQuantity * getUnitsPerEmission(emission, subtype);
         return totalAvailable >= requiredUnits;
     };
 
-    // --- PENDING / SESSION INVENTORY ---
-    const [pendingInventory, setPendingInventory] = useState({});
-    const [inventoryHistory, setInventoryHistory] = useState(() => loadFromStorage('inventoryHistory', []));
+    // --- INVENTORY & WASTE HISTORY ---
 
-    // Updated: Key now includes emission to track separate inputs (e.g. "1 Caja" vs "12 Unidades")
     const updatePendingInventory = (beer, subtype, emission, delta) => {
         const key = `${beer}_${subtype}_${emission}`;
-        setPendingInventory(prev => {
-            const current = prev[key] || 0;
-            const newVal = current + delta;
-            if (newVal === 0) {
-                const { [key]: _, ...rest } = prev;
-                return rest;
-            }
-            return { ...prev, [key]: newVal };
-        });
-    };
-
-    const setPendingInventoryValue = (beer, subtype, emission, value) => {
-        const key = `${beer}_${subtype}_${emission}`;
-        setPendingInventory(prev => {
-            const newVal = parseInt(value, 10);
-            if (isNaN(newVal) || newVal === 0) {
-                const { [key]: _, ...rest } = prev;
-                return rest;
-            }
-            return { ...prev, [key]: newVal };
-        });
-    };
-
-    const clearPendingInventory = () => setPendingInventory({});
-
-    const getPendingInventory = (beer, subtype, emission) => {
-        const key = `${beer}_${subtype}_${emission}`;
-        return pendingInventory[key] || 0;
+        setPendingInventory(prev => ({ ...prev, [key]: (prev[key] || 0) + delta }));
     };
 
     const commitInventory = async () => {
-        const timestamp = new Date().toLocaleString('es-VE', {
-            day: '2-digit', month: '2-digit', year: 'numeric',
-            hour: '2-digit', minute: '2-digit', hour12: true
-        });
-
-        const movements = [];
+        const timestamp = new Date().toLocaleString();
         let totalCount = 0;
+        const movements = [];
 
-        // Procesar todos los cambios
-        const promises = Object.entries(pendingInventory).map(async ([key, quantity]) => {
-            // Key format: Beer_Subtype_Emission
-            // We need to be careful about splitting if names contain underscores, 
-            // but our beer names/subtypes usually don't or we should handle it better.
-            // For now assuming safe split or using last segment as emission.
-            // Actually, safer to rely on known emissions or fix the key generation if names are complex.
-            // Let's assume standard format for now.
+        for (const [key, quantity] of Object.entries(pendingInventory)) {
             const parts = key.split('_');
-            const emission = parts.pop(); // Last one is emission
-            const subtype = parts.pop();  // Second to last is subtype
-            const beer = parts.join('_'); // Rest is beer name (can contain underscores)
-
-            const unitsPerEmission = getUnitsPerEmission(emission, subtype);
-            const totalUnits = quantity * unitsPerEmission;
-
-            await addStock(beer, 'Unidad', subtype, totalUnits);
-
-            totalCount += totalUnits; // Count in UNITS
+            const emission = parts.pop();
+            const subtype = parts.pop();
+            const beer = parts.join('_');
+            const totalUnits = quantity * getUnitsPerEmission(emission, subtype);
+            await addStock(beer, emission, subtype, quantity);
+            totalCount += totalUnits;
             movements.push({ beer, subtype, emission, quantity, totalUnits });
-        });
+        }
 
-        await Promise.all(promises);
+        const report = { organization_id: organizationId, movements, total_units: totalCount };
+        if (organizationId) await createInventoryHistory(report);
 
-        const report = {
-            id: Date.now(),
-            timestamp,
-            movements, // Now contains 'quantity' (e.g. 1) and 'emission' (e.g. Caja)
-            totalUnits: totalCount
-        };
-
-        setInventoryHistory(prev => [report, ...prev].slice(0, 50));
+        setInventoryHistory(prev => [{ ...report, created_at: timestamp }, ...prev].slice(0, 50));
         setPendingInventory({});
+    };
 
-        // NOTIFICATION
-        showNotification(`${totalCount} Uds agregadas al inventario`, 'success');
+    const commitWaste = async () => {
+        const timestamp = new Date().toLocaleString();
+        let totalCount = 0;
+        const movements = [];
 
-        return report;
+        for (const [key, quantity] of Object.entries(pendingWaste)) {
+            const parts = key.split('_');
+            const emission = parts.pop();
+            const subtype = parts.pop();
+            const beer = parts.join('_');
+            const totalUnits = quantity * getUnitsPerEmission(emission, subtype);
+            await deductStock(beer, emission, subtype, quantity);
+            totalCount += totalUnits;
+            movements.push({ beer, subtype, emission, quantity, totalUnits });
+        }
+
+        const report = { organization_id: organizationId, movements, total_units: totalCount };
+        if (organizationId) await createWasteReport(report);
+
+        setBreakageHistory(prev => [{ ...report, created_at: timestamp }, ...prev].slice(0, 50));
+        setPendingWaste({});
+    };
+
+    const reportWaste = async (beer, subtype, quantity) => {
+        const totalUnits = parseInt(quantity, 10);
+        await deductStock(beer, 'Unidad', subtype, totalUnits);
+        const report = {
+            organization_id: organizationId,
+            movements: [{ beer, subtype, emission: 'Unidad', quantity: totalUnits, totalUnits }],
+            total_units: totalUnits
+        };
+        if (organizationId) await createWasteReport(report);
+        setBreakageHistory(prev => [{ ...report, created_at: new Date().toISOString() }, ...prev].slice(0, 50));
+        showNotification(`Reportada Merma: ${quantity} ${beer}`, 'warning');
     };
 
     // --- WASTE / MERMA MANAGEMENT ---
-    const [pendingWaste, setPendingWaste] = useState({});
-    const [breakageHistory, setBreakageHistory] = useState(() => loadFromStorage('breakageHistory', []));
+    // const [pendingWaste, setPendingWaste] = useState({}); // Moved above
+    // const [breakageHistory, setBreakageHistory] = useState(() => loadFromStorage('breakageHistory', [])); // Moved above
 
     const updatePendingWaste = (beer, subtype, emission, delta) => {
         const key = `${beer}_${subtype}_${emission}`;
@@ -1049,155 +859,31 @@ export const ProductProvider = ({ children }) => {
 
     const clearPendingWaste = () => setPendingWaste({});
 
-    const commitWaste = async () => {
-        // ... (Keep existing for backward compatibility if needed, or remove if unused)
-        // For now, let's keep it but focusing on the new direct capability
-        const timestamp = new Date().toLocaleString('es-VE', {
-            day: '2-digit', month: '2-digit', year: 'numeric',
-            hour: '2-digit', minute: '2-digit', hour12: true
-        });
+    // commitWaste function moved and refactored above
 
-        let totalCount = 0;
-        const movements = [];
-        // Safe helper for processing waste without crashing
-        try {
-            const promises = Object.entries(pendingWaste).map(async ([key, quantity]) => {
-                const parts = key.split('_');
-                // Safety check for key format
-                if (parts.length < 2) return;
-
-                const emission = parts.pop();
-                const subtype = parts.pop();
-                const beer = parts.join('_');
-
-                const totalUnits = quantity * (getUnitsPerEmission ? getUnitsPerEmission(emission, subtype) : 1);
-
-                // If deductStock fails, catch it so we don't crash everything
-                try {
-                    if (deductStock) await deductStock(beer, emission, subtype, quantity);
-                } catch (e) {
-                    console.error("Error deducting stock in commitWaste", e);
-                }
-
-                totalCount += totalUnits;
-                movements.push({ beer, subtype, emission, quantity, totalUnits });
-            });
-
-            await Promise.all(promises);
-        } catch (err) {
-            console.error("Error in commitWaste processing", err);
-        }
-
-        const report = {
-            id: Date.now(),
-            timestamp,
-            movements,
-            totalUnits: totalCount,
-            type: 'WASTE'
-        };
-
-        setBreakageHistory(prev => [report, ...prev].slice(0, 50));
-        setPendingWaste({});
-        return report;
-    };
-
-
-    // NEW Direct Waste Reporting
-    const reportWaste = async (beer, subtype, quantity) => {
-        const timestamp = new Date().toLocaleString('es-VE', {
-            day: '2-digit', month: '2-digit', year: 'numeric',
-            hour: '2-digit', minute: '2-digit', hour12: true
-        });
-
-        const emission = 'Unidad'; // FORCE UNIT
-        const totalUnits = parseInt(quantity, 10);
-
-        // Deduct immediatly
-        await deductStock(beer, emission, subtype, totalUnits);
-
-        const report = {
-            id: Date.now(),
-            timestamp,
-            movements: [{ beer, subtype, emission, quantity: totalUnits, totalUnits }],
-            totalUnits: totalUnits, // Positive because it's a "Count of Waste"
-            type: 'WASTE'
-        };
-
-        setBreakageHistory(prev => [report, ...prev].slice(0, 50));
-
-        // NOTIFICATION
-        showNotification(`Reportada Merma: ${quantity} ${beer}`, 'warning');
-
-        return report;
-    };
+    // reportWaste function moved and refactored above
 
     const getPendingWaste = (beer, subtype, emission) => {
         const key = `${beer}_${subtype}_${emission}`;
         return pendingWaste[key] || 0;
     };
 
-    useEffect(() => { localStorage.setItem('breakageHistory', JSON.stringify(breakageHistory)); }, [breakageHistory]);
+    // useEffect(() => { localStorage.setItem('breakageHistory', JSON.stringify(breakageHistory)); }, [breakageHistory]); // REMOVED
 
     return (
         <ProductContext.Provider value={{
-            beerTypes,
-            addBeerType,
-            removeBeerType,
-            emissionOptions,
-            addEmissionType,
-            removeEmissionType,
-            subtypes,
-            conversions,
-            updateConversion,
-            prices,
-            updatePrice,
-            inventory,
-            setBaseStock,
-            addStock,
-            deductStock,
-            checkStock,
-            getInventory,
-            getPrice,
-            getBsPrice,
-            exchangeRates,
-            fetchRates,
-            currentRate,
-            updateCustomRate,
-            getUnitsPerEmission,
-            pendingInventory,
-            updatePendingInventory,
-            clearPendingInventory,
-            commitInventory,
-            getPendingInventory,
-            setPendingInventoryValue,
-            inventoryHistory,
-            getBeerColor,
-            updateBeerColor,
-            productMap,
-            checkAggregateStock,
-            getEmissionsForSubtype,
-            // Waste Exports
-            pendingWaste,
-            updatePendingWaste,
-            clearPendingWaste,
-            commitWaste,
-            reportWaste, // Exposed
-            getPendingWaste,
-            breakageHistory,
-            // Cost & Profit
-            costPrices,
-            updateCostPrice,
-            getCostPrice,
-            getInventoryAssetValue,
-            // Currency Config
-            mainCurrency,
-            setMainCurrency,
-            currencySymbol,
-            resetApp: async () => {
-                const { resetDatabase } = await import('../services/api');
-                await resetDatabase();
-                window.location.reload();
-            }
+            beerTypes, addBeerType, removeBeerType, emissionOptions, addEmissionType, removeEmissionType,
+            subtypes, conversions, updateConversion, prices, updatePrice, inventory, setBaseStock, addStock, deductStock,
+            checkStock, getInventory, getPrice, getBsPrice, exchangeRates, fetchRates, currentRate, updateCustomRate,
+            getUnitsPerEmission, pendingInventory, updatePendingInventory, clearPendingInventory: () => setPendingInventory({}),
+            commitInventory, getPendingInventory: (b, s, e) => pendingInventory[`${b}_${s}_${e}`] || 0,
+            setPendingInventoryValue: (b, s, e, v) => setPendingInventory(prev => ({ ...prev, [`${b}_${s}_${e}`]: v })),
+            inventoryHistory, getBeerColor, updateBeerColor, productMap, checkAggregateStock, getEmissionsForSubtype,
+            pendingWaste, updatePendingWaste,
+            clearPendingWaste: () => setPendingWaste({}), commitWaste, reportWaste, breakageHistory,
+            getPendingWaste: (b, s, e) => pendingWaste[`${b}_${s}_${e}`] || 0,
+            costPrices, updateCostPrice, getCostPrice, getInventoryAssetValue, mainCurrency, setMainCurrency, currencySymbol,
+            resetApp: async () => { await resetDatabase(); window.location.reload(); }
         }}>
             {children}
         </ProductContext.Provider>

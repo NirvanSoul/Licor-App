@@ -1029,11 +1029,7 @@ export function CashPageContent() {
                                         padding: '0.6rem',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        justifyContent: 'center',
-                                        background: 'white',
-                                        border: '1px solid rgba(0,0,0,0.1)',
-                                        borderRadius: '12px',
-                                        cursor: 'pointer'
+                                        justifyContent: 'center'
                                     }}
                                     onClick={() => setShowReportModal(true)}
                                 >

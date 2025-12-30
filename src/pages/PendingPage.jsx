@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useOrder } from '../context/OrderContext';
 import { useProduct } from '../context/ProductContext';
 import { useNotification } from '../context/NotificationContext';
-import { Clock, Plus, Beer, MoreVertical, X, CheckCircle, ChevronDown, ChevronUp, Search, History, Store, User, Hash, AlertCircle } from 'lucide-react';
+import { Clock, Plus, Beer, MoreVertical, X, CheckCircle, ChevronDown, ChevronUp, Search, History, Store, User, Hash, AlertCircle, Pencil } from 'lucide-react';
 import TicketGrid from '../components/TicketGrid';
 import ContainerSelector from '../components/ContainerSelector';
 import './PendingPage.css'; // We will create this
@@ -18,8 +18,8 @@ const BrokenBottleIcon = ({ size = 20, color = 'currentColor', ...props }) => (
 );
 
 export default function PendingPage() {
-    const { pendingOrders, addItemToOrder, closeOrder, createOrder, calculateOrderTotal } = useOrder();
-    const { getBsPrice, beerTypes, exchangeRates, getPrice, currencySymbol, reportWaste, mainCurrency, currentRate } = useProduct();
+    const { pendingOrders, addItemToOrder, closeOrder, createOrder, calculateOrderTotal, updateOrderName } = useOrder();
+    const { getBsPrice, beerTypes, exchangeRates, getPrice, currencySymbol, reportWaste, mainCurrency, currentRate, getUnitsPerEmission } = useProduct();
     const [selectedOrder, setSelectedOrder] = useState(null); // For "Add Item" modal
     const [closingOrderId, setClosingOrderId] = useState(null); // For "Confirm Close" modal
     const [showOpenTabModal, setShowOpenTabModal] = useState(false);
@@ -27,6 +27,14 @@ export default function PendingPage() {
     const [quickAddSubtype, setQuickAddSubtype] = useState('Botella');
     const [showWasteModal, setShowWasteModal] = useState(false);
     const [wasteSelection, setWasteSelection] = useState({ beer: '', quantity: 1 });
+
+    // Success Modal after closing
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [closedOrderInfo, setClosedOrderInfo] = useState(null);
+
+    // Renaming state
+    const [renamingOrder, setRenamingOrder] = useState(null);
+    const [newNameValue, setNewNameValue] = useState('');
 
     // Notification
     const { showNotification } = useNotification();
@@ -40,17 +48,17 @@ export default function PendingPage() {
 
     const handleQuickOpenTab = () => {
         setNewTabName('');
+        setPaymentMethod(null);
+        setPaymentReference('');
         setShowOpenTabModal(true);
     };
 
     const confirmOpenTab = () => {
-        if (!newTabName.trim()) {
-            if (showNotification) showNotification('Por favor, ingresa un nombre.', 'error');
-            return;
-        }
-        createOrder(newTabName.trim(), [], 'Local');
+        createOrder(newTabName.trim() || 'Anónimo', [], 'Local', paymentMethod, paymentReference);
         setShowOpenTabModal(false);
         setNewTabName('');
+        setPaymentMethod(null);
+        setPaymentReference('');
         if (showNotification) showNotification('Carta abierta exitosamente', 'success');
     };
 
@@ -116,6 +124,12 @@ export default function PendingPage() {
     const renderOrderList = (orders) => (
         orders.map(order => {
             const isOpenTab = order.items.some(i => i.emission === 'Libre');
+            const isComplete = order.items.every(item => {
+                if (item.emission === 'Libre') return true;
+                const targetUnits = getUnitsPerEmission(item.emission, item.subtype) * (item.quantity || 1);
+                const filledUnits = (item.slots || []).filter(s => s !== null).length;
+                return filledUnits >= targetUnits;
+            });
 
             return (
                 <div key={order.id} className={`order-card ${expandedOrders[order.id] ? 'expanded' : ''}`}>
@@ -130,6 +144,28 @@ export default function PendingPage() {
                             <div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <h3 className="customer-name">{order.customerName}</h3>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setRenamingOrder(order);
+                                            setNewNameValue(order.customerName);
+                                        }}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            padding: '4px',
+                                            cursor: 'pointer',
+                                            color: 'var(--text-secondary)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            opacity: 0.6,
+                                            transition: 'opacity 0.2s'
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                                        onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
+                                    >
+                                        <Pencil size={14} />
+                                    </button>
                                     {isOpenTab && (
                                         <span style={{
                                             background: 'linear-gradient(135deg, #F97316 0%, #EA580C 100%)',
@@ -226,8 +262,28 @@ export default function PendingPage() {
                                     </div>
                                 </div>
                                 <div className="actions-row" style={{ marginTop: '0.5rem', display: 'flex', gap: '0.75rem' }}>
-                                    <button className="action-btn close-ticket-btn" onClick={() => { setClosingOrderId(order.id); setPaymentMethod(null); setPaymentReference(''); }} style={{ flex: 1 }}>
-                                        Cerrar Ticket
+                                    <button
+                                        className={`action-btn close-ticket-btn ${!isComplete ? 'disabled' : ''}`}
+                                        disabled={!isComplete}
+                                        onClick={async () => {
+                                            const { totalBs, totalUsd } = calculateOrderTotal(order.items, order.type);
+                                            await closeOrder(order.id, order.paymentMethod || 'Efectivo', order.reference || '');
+                                            setClosedOrderInfo({
+                                                ticketNumber: order.ticketNumber,
+                                                totalBs,
+                                                totalUsd,
+                                                customerName: order.customerName
+                                            });
+                                            setShowSuccessModal(true);
+                                        }}
+                                        style={{
+                                            flex: 1,
+                                            opacity: isComplete ? 1 : 0.5,
+                                            cursor: isComplete ? 'pointer' : 'not-allowed',
+                                            filter: isComplete ? 'none' : 'grayscale(0.5)'
+                                        }}
+                                    >
+                                        {isComplete ? 'Cerrar Ticket' : 'Llenar Ticket'}
                                     </button>
                                 </div>
                             </div>
@@ -526,7 +582,8 @@ export default function PendingPage() {
                 if (!orderToClose) return null;
                 const totalUsd = getOrderTotal(orderToClose.items, orderToClose.type);
                 const totalBs = totalUsd * (currentRate || 0);
-                const isOpenTab = orderToClose.items.some(i => i.emission === 'Libre' || i.emission === 'Consumo');
+                // An order is an 'Open Tab' if it doesn't have a payment method yet (it needs to be cobrar-ed at closing)
+                const isOpenTab = !orderToClose.paymentMethod;
 
                 // If it's NOT an open tab, they already paid or pay elsewhere (Pre-Pagado). 
                 // If the payment method was already defined in "Vender", we just confirm.
@@ -742,6 +799,111 @@ export default function PendingPage() {
                 );
             })()}
 
+            {/* RENAME MODAL */}
+            {renamingOrder && (
+                <div className="pending-modal-overlay" onClick={() => setRenamingOrder(null)}>
+                    <div className="pending-modal-content" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
+                        <div className="pending-modal-header">
+                            <div>
+                                <h3 className="pending-modal-title">Renombrar Ticket</h3>
+                                <p className="pending-modal-subtitle">Ticket #{renamingOrder.ticketNumber}</p>
+                            </div>
+                            <button className="close-btn" onClick={() => setRenamingOrder(null)}>
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        <div style={{ padding: '0.5rem 0' }}>
+                            <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
+                                <User size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+                                <input
+                                    type="text"
+                                    autoFocus
+                                    className="ticket-input-large"
+                                    value={newNameValue}
+                                    onChange={(e) => setNewNameValue(e.target.value)}
+                                    placeholder="Nombre del Cliente (Opcional)"
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            updateOrderName(renamingOrder.id, newNameValue.trim() || 'Anónimo');
+                                            setRenamingOrder(null);
+                                        }
+                                    }}
+                                    style={{ paddingLeft: '40px', width: '100%' }}
+                                />
+                            </div>
+
+                            <button
+                                className="action-btn"
+                                style={{
+                                    width: '100%',
+                                    background: 'linear-gradient(135deg, #fb923c 0%, #f97316 100%)',
+                                    color: 'white'
+                                }}
+                                onClick={() => {
+                                    updateOrderName(renamingOrder.id, newNameValue.trim() || 'Anónimo');
+                                    setRenamingOrder(null);
+                                }}
+                            >
+                                Guardar Cambios
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* SUCCESS MODAL AFTER CLOSING */}
+            {showSuccessModal && closedOrderInfo && (
+                <div className="pending-modal-overlay">
+                    <div className="pending-modal-content" style={{ maxWidth: '400px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
+                            <div style={{
+                                width: '80px', height: '80px', borderRadius: '50%',
+                                background: 'rgba(52, 199, 89, 0.1)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center'
+                            }}>
+                                <CheckCircle size={48} color="#34c759" />
+                            </div>
+                        </div>
+                        <h3 className="pending-modal-title" style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>Ticket Cerrado</h3>
+                        <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+                            El ticket <b>#{closedOrderInfo.ticketNumber}</b> de <b>{closedOrderInfo.customerName}</b> ha sido procesado exitosamente.
+                        </p>
+                        <div style={{ background: 'var(--bg-app)', padding: '1rem', borderRadius: '12px', marginBottom: '2rem' }}>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Total Registrado</div>
+                            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#34c759' }}>{closedOrderInfo.totalBs.toLocaleString('es-VE')} Bs</div>
+                            <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>${closedOrderInfo.totalUsd.toFixed(2)}</div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <button
+                                className="action-btn"
+                                style={{
+                                    background: 'linear-gradient(135deg, #34c759 0%, #28a745 100%)',
+                                    color: 'white', justifyContent: 'center', fontWeight: 700
+                                }}
+                                onClick={() => setShowSuccessModal(false)}
+                            >
+                                Continuar
+                            </button>
+                            <button
+                                className="action-btn"
+                                style={{
+                                    background: 'transparent',
+                                    color: 'var(--text-secondary)', justifyContent: 'center',
+                                    border: '1px solid var(--accent-light)'
+                                }}
+                                onClick={() => {
+                                    setShowSuccessModal(false);
+                                    window.location.href = '/caja';
+                                }}
+                            >
+                                Ver Detalles en Caja
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* OPEN TAB MODAL */}
             {showOpenTabModal && (
                 <div className="pending-modal-overlay">
@@ -749,23 +911,22 @@ export default function PendingPage() {
                         <div className="pending-modal-header" style={{ marginBottom: '1.5rem' }}>
                             <div>
                                 <h3 className="pending-modal-title">Abrir Carta</h3>
-                                <p className="pending-modal-subtitle">Ingrese el nombre del cliente</p>
+                                <p className="pending-modal-subtitle">Ingrese el nombre del cliente (Opcional)</p>
                             </div>
                             <button className="close-btn" onClick={() => setShowOpenTabModal(false)}>
                                 <X size={24} />
                             </button>
                         </div>
 
-                        <div style={{ marginBottom: '2rem' }}>
-                            <div style={{ position: 'relative' }}>
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <div style={{ position: 'relative', marginBottom: '1rem' }}>
                                 <User size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
                                 <input
                                     type="text"
                                     autoFocus
-                                    placeholder="Ej: Juan Pérez - Mesa 5"
+                                    placeholder="Nombre del Cliente (Opcional)"
                                     value={newTabName}
                                     onChange={(e) => setNewTabName(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && confirmOpenTab()}
                                     style={{
                                         width: '100%',
                                         padding: '12px 12px 12px 40px',
@@ -778,6 +939,43 @@ export default function PendingPage() {
                                     }}
                                 />
                             </div>
+
+                            <label style={{ display: 'block', marginBottom: '0.75rem', fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>Método de Pago</label>
+                            <div className="payment-methods-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem', marginBottom: '1rem' }}>
+                                {['Efectivo', 'Pago Móvil', 'Punto', 'Bio Pago'].map(method => (
+                                    <button
+                                        key={method}
+                                        className={`option-btn ${paymentMethod === method ? 'selected' : ''}`}
+                                        onClick={() => setPaymentMethod(method)}
+                                        style={{ padding: '0.75rem', fontSize: '0.85rem' }}
+                                    >
+                                        {method}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {paymentMethod === 'Pago Móvil' && (
+                                <div style={{ position: 'relative' }}>
+                                    <Hash size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+                                    <input
+                                        type="text"
+                                        placeholder="Referencia"
+                                        value={paymentReference}
+                                        onChange={(e) => { if (/^\d*$/.test(e.target.value)) setPaymentReference(e.target.value); }}
+                                        inputMode="numeric"
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px 12px 12px 40px',
+                                            borderRadius: '12px',
+                                            border: '1px solid var(--accent-light)',
+                                            background: 'var(--bg-app)',
+                                            color: 'var(--text-primary)',
+                                            fontSize: '1rem',
+                                            outline: 'none'
+                                        }}
+                                    />
+                                </div>
+                            )}
                         </div>
 
                         <div className="actions-row">
@@ -791,14 +989,14 @@ export default function PendingPage() {
                             <button
                                 className="action-btn"
                                 onClick={confirmOpenTab}
-                                disabled={!newTabName.trim()}
+                                disabled={!paymentMethod || (paymentMethod === 'Pago Móvil' && !paymentReference.trim())}
                                 style={{
-                                    background: !newTabName.trim() ? 'var(--bg-card-hover)' : 'linear-gradient(135deg, #fb923c 0%, #f97316 100%)',
-                                    color: !newTabName.trim() ? 'var(--text-secondary)' : 'white',
+                                    background: (!paymentMethod || (paymentMethod === 'Pago Móvil' && !paymentReference.trim())) ? 'var(--bg-card-hover)' : 'linear-gradient(135deg, #fb923c 0%, #f97316 100%)',
+                                    color: (!paymentMethod || (paymentMethod === 'Pago Móvil' && !paymentReference.trim())) ? 'var(--text-secondary)' : 'white',
                                     border: 'none',
                                     padding: '0.75rem',
                                     justifyContent: 'center',
-                                    opacity: !newTabName.trim() ? 0.7 : 1
+                                    opacity: (!paymentMethod || (paymentMethod === 'Pago Móvil' && !paymentReference.trim())) ? 0.7 : 1
                                 }}
                             >
                                 Confirmar

@@ -99,10 +99,9 @@
     width: 100%;
     margin: 0 auto;
     position: relative;
-    /* Hardware acceleration */
-    transform: translateZ(0);
-    backface-visibility: hidden;
-    will-change: transform, opacity;
+    /* Removed transform: translateZ(0) to allow position: fixed to be relative to the viewport, not this container */
+    /* backface-visibility: hidden; */
+    will-change: opacity;
 }
 
 /* Contenedor principal */

@@ -11,6 +11,7 @@ import CompleteRegistration from './pages/CompleteRegistration';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import DeveloperPage from './pages/DeveloperPage';
+import ActivateLicense from './pages/ActivateLicense';
 
 import ScrollToTop from './components/ScrollToTop';
 import { ProductProvider } from './context/ProductContext';
@@ -52,6 +53,7 @@ function App() {
                     <Route path="/forgot-password" element={<ForgotPassword />} />
                     <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/complete-registration" element={<CompleteRegistration />} />
+                    <Route path="/activar/:token" element={<ActivateLicense />} />
 
                     {/* Protected Routes */}
                     <Route element={<PrivateRoute />}>

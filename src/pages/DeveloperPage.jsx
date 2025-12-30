@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Activity, MousePointer, Layout, Map, RefreshCcw, Key, Copy, Plus, Trash2, Lock, X, CheckCircle2, Database, RefreshCw } from 'lucide-react';
+import { Shield, Activity, MousePointer, Layout, Map, RefreshCcw, Key, Copy, Plus, Trash2, Lock, X, CheckCircle2, Database, RefreshCw, ExternalLink } from 'lucide-react';
 import { generateFakeData, clearAllData } from '../utils/DevDataGenerator';
 
 export default function DeveloperPage() {
@@ -263,6 +263,34 @@ export default function DeveloperPage() {
         if (!window.confirm("¿Borrar clave?")) return;
         await supabase.from('license_keys').delete().eq('id', id);
         fetchKeys();
+    };
+
+    const handleShareLink = async (keyData) => {
+        let token = keyData.activation_token;
+        if (!token) {
+            // Generate token if not exists (using UUID v4)
+            const newToken = crypto.randomUUID();
+            const expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + 7); // Valid for 7 days
+
+            const { error } = await supabase
+                .from('license_keys')
+                .update({
+                    activation_token: newToken,
+                    activation_token_expires_at: expiresAt.toISOString()
+                })
+                .eq('id', keyData.id);
+
+            if (error) {
+                alert("Error generando link: " + error.message);
+                return;
+            }
+            token = newToken;
+            fetchKeys();
+        }
+
+        const activationUrl = `${window.location.origin}/activar/${token}`;
+        handleCopy(keyData.id + '_link', activationUrl);
     };
 
     const handleCopy = async (id, text) => {
@@ -709,6 +737,11 @@ export default function DeveloperPage() {
                                                         <button onClick={() => handleCopy(k.id, k.key)} style={{ padding: '10px', borderRadius: '10px', border: `1px solid ${copiedId === k.id ? '#10b981' : 'var(--accent-light)'}`, background: copiedId === k.id ? 'rgba(16, 185, 129, 0.12)' : 'var(--bg-card-hover)', cursor: 'pointer', color: copiedId === k.id ? '#10b981' : 'var(--text-primary)', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                             {copiedId === k.id ? <><Shield size={16} /><span style={{ fontSize: '0.75rem', fontWeight: 800 }}>¡OK!</span></> : <Copy size={16} />}
                                                         </button>
+                                                        {k.status === 'available' && (
+                                                            <button onClick={() => handleShareLink(k)} style={{ padding: '10px', borderRadius: '10px', border: `1px solid ${copiedId === k.id + '_link' ? '#10b981' : 'var(--accent-light)'}`, background: copiedId === k.id + '_link' ? 'rgba(16, 185, 129, 0.12)' : 'var(--bg-card-hover)', cursor: 'pointer', color: copiedId === k.id + '_link' ? '#10b981' : 'var(--text-primary)', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                {copiedId === k.id + '_link' ? <><CheckCircle2 size={16} /><span style={{ fontSize: '0.75rem', fontWeight: 800 }}>LINK!</span></> : <ExternalLink size={16} />}
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </td>
                                                 <td style={{ padding: '1.5rem' }}>
@@ -921,7 +954,7 @@ export default function DeveloperPage() {
 
             {/* Modal de Enrolamiento 2FA */}
             {showMfaEnroll && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: isMobile ? '10px' : '20px' }}>
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000, padding: isMobile ? '10px' : '20px' }}>
                     <div style={{ background: '#1a1a1a', borderRadius: '32px', border: '1px solid #333', width: '100%', maxWidth: '450px', padding: isMobile ? '1.5rem' : '2.5rem', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', overflowX: 'hidden', maxHeight: '95vh', overflowY: 'auto' }}>
                         <button onClick={() => setShowMfaEnroll(false)} style={{ position: 'absolute', top: isMobile ? '15px' : '24px', right: isMobile ? '15px' : '24px', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={24} /></button>
 
@@ -1013,7 +1046,7 @@ export default function DeveloperPage() {
 
             {/* Modal de Verificación 2FA para Generar */}
             {showMfaVerify && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: isMobile ? '10px' : '20px' }}>
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000, padding: isMobile ? '10px' : '20px' }}>
                     <div style={{ background: '#1a1a1a', borderRadius: '32px', border: '1px solid #333', width: '100%', maxWidth: '400px', padding: isMobile ? '1.5rem' : '2.5rem', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
                         <button onClick={() => setShowMfaVerify(false)} style={{ position: 'absolute', top: isMobile ? '15px' : '20px', right: isMobile ? '15px' : '20px', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={24} /></button>
 
@@ -1064,7 +1097,7 @@ export default function DeveloperPage() {
 
             {/* Modal de Introducción 2FA (Estético) */}
             {showMfaIntro && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: isMobile ? '10px' : '20px' }}>
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000, padding: isMobile ? '10px' : '20px' }}>
                     <div style={{ background: '#1a1a1a', borderRadius: '32px', border: '1px solid #333', width: '100%', maxWidth: '420px', padding: isMobile ? '1.5rem' : '2.5rem', textAlign: 'center', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
                         <div style={{ width: isMobile ? '48px' : '64px', height: isMobile ? '48px' : '64px', borderRadius: '16px', background: 'rgba(16, 185, 129, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981', margin: '0 auto 1.25rem' }}>
                             <Shield size={isMobile ? 24 : 32} />

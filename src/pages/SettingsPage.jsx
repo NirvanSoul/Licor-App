@@ -188,7 +188,10 @@ const BeerDashboardCard = ({ beerName, searchFilter = '' }) => {
                 {/* Hide selector for Tercio as requested */}
                 {beerName !== 'Tercio' && (
                     <div style={{ width: '200px' }} onClick={(e) => e.stopPropagation()}>
-                        <ContainerSelector value={subtype} onChange={setSubtype} />
+                        <ContainerSelector value={subtype} onChange={(val) => {
+                            setSubtype(val);
+                            setIsExpanded(true);
+                        }} />
                     </div>
                 )}
             </div>
@@ -466,7 +469,10 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
 
                             {/* USD Option */}
                             <button
-                                onClick={() => setCurrencyMode('USD')}
+                                onClick={() => {
+                                    setCurrencyMode('USD');
+                                    setIsExpanded(true);
+                                }}
                                 style={{
                                     flex: 1,
                                     border: 'none',
@@ -484,7 +490,10 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
 
                             {/* BS Option */}
                             <button
-                                onClick={() => setCurrencyMode('BS')}
+                                onClick={() => {
+                                    setCurrencyMode('BS');
+                                    setIsExpanded(true);
+                                }}
                                 style={{
                                     flex: 1,
                                     border: 'none',
@@ -502,7 +511,10 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
                         </div>
 
                         <div className="subtype-selector-container" style={{ width: '180px', display: 'flex', alignItems: 'center' }}>
-                            <ContainerSelector value={subtype} onChange={setSubtype} />
+                            <ContainerSelector value={subtype} onChange={(val) => {
+                                setSubtype(val);
+                                setIsExpanded(true);
+                            }} />
                         </div>
                     </div>
                 )}
@@ -541,6 +553,7 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
                                     </div>
                                     <input
                                         type="number"
+                                        inputMode="decimal"
                                         placeholder="0.00"
                                         className="price-input"
                                         value={priceMap[emission]?.standard || ''}
@@ -565,6 +578,7 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
                                     </div>
                                     <input
                                         type="number"
+                                        inputMode="decimal"
                                         placeholder="0.00"
                                         className="price-input"
                                         value={priceMap[emission]?.local || ''}
@@ -662,7 +676,7 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
                     <div
                         onClick={() => setSuccessPopup(null)}
                         style={{
-                            position: 'fixed', inset: 0, zIndex: 10000,
+                            position: 'fixed', inset: 0, zIndex: 100000,
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)'
                         }}
@@ -795,6 +809,14 @@ export default function SettingsPage() {
     const [selectedPlanTab, setSelectedPlanTab] = useState('free'); // 'free', 'monthly', 'yearly'
 
     const WHATSAPP_NUMBER = "584220131019";
+
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     // Invite State (Already declared above)
     const [activationKey, setActivationKey] = useState('');
@@ -1244,7 +1266,7 @@ export default function SettingsPage() {
                     >
                         <ChevronLeft size={28} color="var(--text-primary)" />
                     </button>
-                    <h1 className="payment-section-title" style={{ fontSize: '1.5rem', margin: '0 auto', paddingLeft: '48px', paddingRight: '48px' }}>
+                    <h1 className="payment-section-title" style={{ fontSize: isMobile ? '1.25rem' : '1.5rem', margin: '0 auto', paddingLeft: isMobile ? '32px' : '48px', paddingRight: isMobile ? '32px' : '48px', textAlign: 'center' }}>
                         {currentView === 'bcv' && 'Tasas '}
                         {currentView === 'products' && 'Gestion de Productos'}
                         {currentView === 'dashboard' && 'Precios Actuales'}
@@ -1469,7 +1491,7 @@ export default function SettingsPage() {
                     style={{
                         position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                         background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3000
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000
                     }}
                 >
                     <div
@@ -1997,8 +2019,23 @@ export default function SettingsPage() {
                                     </form>
                                 </div>
                             ) : (
-                                <div style={{ background: 'var(--bg-card-hover)', padding: '2rem', borderRadius: '24px', maxWidth: '450px', margin: '0 auto', border: '1px solid var(--accent-light)', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', alignItems: 'center' }}>
+                                <div style={{
+                                    background: 'var(--bg-card-hover)',
+                                    padding: isMobile ? '1.5rem 1.25rem' : '2rem',
+                                    borderRadius: '24px',
+                                    maxWidth: '450px',
+                                    margin: '0 auto',
+                                    border: '1px solid var(--accent-light)',
+                                    boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
+                                }}>
+                                    <div style={{
+                                        display: 'flex',
+                                        flexDirection: isMobile ? 'column' : 'row',
+                                        justifyContent: 'space-between',
+                                        marginBottom: '1.5rem',
+                                        alignItems: isMobile ? 'flex-start' : 'center',
+                                        gap: isMobile ? '0.75rem' : '0'
+                                    }}>
                                         <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>Estado del Sistema</span>
                                         <span style={{
                                             color: '#10b981',
@@ -2008,29 +2045,72 @@ export default function SettingsPage() {
                                             gap: '6px',
                                             background: 'rgba(16, 185, 129, 0.1)',
                                             padding: '4px 12px',
-                                            borderRadius: '20px'
+                                            borderRadius: '20px',
+                                            fontSize: isMobile ? '0.85rem' : '1rem'
                                         }}>
                                             <CheckCircle2 size={16} /> {role === 'DEVELOPER' ? 'ACCESO VITALICIO' : 'ACTIVO'}
                                         </span>
                                     </div>
                                     {role !== 'DEVELOPER' ? (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                                <span style={{ color: 'var(--text-secondary)' }}>Vencimiento</span>
-                                                <span style={{ fontWeight: 700, color: '#f97316' }}>
+                                            {/* Vencimiento */}
+                                            <div style={{
+                                                display: 'flex',
+                                                flexDirection: isMobile ? 'column' : 'row',
+                                                justifyContent: 'space-between',
+                                                paddingBottom: '1rem',
+                                                borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                                alignItems: isMobile ? 'flex-start' : 'center',
+                                                gap: isMobile ? '4px' : '0'
+                                            }}>
+                                                <span style={{ color: 'var(--text-secondary)', fontSize: isMobile ? '0.85rem' : '1rem' }}>Vencimiento</span>
+                                                <span style={{ fontWeight: 700, color: '#f97316', fontSize: isMobile ? '1.1rem' : '1rem', textAlign: 'left' }}>
                                                     {formatDate(licenseInfo.license_expires_at)}
                                                 </span>
                                             </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                                <span style={{ color: 'var(--text-secondary)' }}>Plan Actual</span>
-                                                <span style={{ fontWeight: 800, color: licenseInfo.plan_type?.toLowerCase() === 'free' ? '#94a3b8' : '#3b82f6', textTransform: 'uppercase' }}>
+
+                                            {/* Plan Actual */}
+                                            <div style={{
+                                                display: 'flex',
+                                                flexDirection: isMobile ? 'column' : 'row',
+                                                justifyContent: 'space-between',
+                                                paddingBottom: '1rem',
+                                                borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                                alignItems: isMobile ? 'flex-start' : 'center',
+                                                gap: isMobile ? '4px' : '0'
+                                            }}>
+                                                <span style={{ color: 'var(--text-secondary)', fontSize: isMobile ? '0.85rem' : '1rem' }}>Plan Actual</span>
+                                                <span style={{
+                                                    fontWeight: 800,
+                                                    color: licenseInfo.plan_type?.toLowerCase() === 'free' ? '#94a3b8' : '#3b82f6',
+                                                    textTransform: 'uppercase',
+                                                    fontSize: isMobile ? '1.1rem' : '1rem',
+                                                    textAlign: 'left'
+                                                }}>
                                                     {getPlanLabel(licenseInfo.plan_type)}
                                                 </span>
                                             </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                <span style={{ color: 'var(--text-secondary)' }}>Clave Activa</span>
-                                                <code style={{ background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: '4px', letterSpacing: '1px' }}>
-                                                    •••• •••• {licenseInfo.license_key ? licenseInfo.license_key.slice(-4) : '****'}
+
+                                            {/* Clave Activa */}
+                                            <div style={{
+                                                display: 'flex',
+                                                flexDirection: isMobile ? 'column' : 'row',
+                                                justifyContent: 'space-between',
+                                                alignItems: isMobile ? 'flex-start' : 'center',
+                                                gap: isMobile ? '8px' : '0'
+                                            }}>
+                                                <span style={{ color: 'var(--text-secondary)', fontSize: isMobile ? '0.85rem' : '1rem' }}>Clave Activa</span>
+                                                <code style={{
+                                                    background: 'rgba(255,255,255,0.05)',
+                                                    padding: '4px 12px',
+                                                    borderRadius: '8px',
+                                                    letterSpacing: '1px',
+                                                    fontSize: isMobile ? '1rem' : '0.9rem',
+                                                    width: isMobile ? '100%' : 'auto',
+                                                    textAlign: 'left',
+                                                    whiteSpace: 'nowrap'
+                                                }}>
+                                                    •••• •••• {licenseInfo?.license_key ? licenseInfo.license_key.slice(-4) : '****'}
                                                 </code>
                                             </div>
                                         </div>
@@ -2329,6 +2409,7 @@ export default function SettingsPage() {
 
                                                     <input
                                                         type="number"
+                                                        inputMode="numeric"
                                                         className="no-spin"
                                                         style={{
                                                             width: '45px',

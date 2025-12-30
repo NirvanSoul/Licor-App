@@ -440,8 +440,6 @@ export default function SalesPage() {
         const hasTakeAway = cartItems.some(i => i.consumptionMode === 'Para Llevar');
 
         if (ticketStep === 2) {
-            if (hasLocal && !customerName.trim()) { alert("Ingresa nombre del cliente."); return; }
-
             // STRICT PAYMENT VALIDATION FOR ALL ORDERS
             if (!paymentMethod) { alert("Selecciona método de pago para procesar la orden."); return; }
             if (paymentMethod === 'Pago Móvil' && !paymentReference.trim()) { alert("Ingresa referencia."); return; }
@@ -568,13 +566,16 @@ export default function SalesPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }} onClick={(e) => e.stopPropagation()}>
                         <ContainerSelector
                             value={orderState.subtype}
-                            onChange={(val) => setOrderState(prev => ({
-                                ...prev,
-                                subtype: val,
-                                emission: null,
-                                // If switching to Botella Tercio via selector, auto-select beerType
-                                beerType: val === 'Botella Tercio' ? 'Tercio' : (prev.beerType === 'Tercio' ? null : prev.beerType)
-                            }))}
+                            onChange={(val) => {
+                                setOrderState(prev => ({
+                                    ...prev,
+                                    subtype: val,
+                                    emission: null,
+                                    // If switching to Botella Tercio via selector, auto-select beerType
+                                    beerType: val === 'Botella Tercio' ? 'Tercio' : (prev.beerType === 'Tercio' ? null : prev.beerType)
+                                }));
+                                setOpenSection('emission');
+                            }}
                         />
                     </div>
                 }
@@ -610,11 +611,15 @@ export default function SalesPage() {
                                     beerType: isTercioActive ? null : 'Tercio',
                                     // Keep variety so user can choose Variado Tercio
                                 }));
+                                setOpenSection('beer');
                             }}
                         />
                         <VarietyToggle
                             beerVariety={orderState.beerVariety}
-                            onToggle={handleVarietyToggle}
+                            onToggle={(v) => {
+                                handleVarietyToggle(v);
+                                setOpenSection('beer');
+                            }}
                         />
                     </div>
                 }
@@ -901,7 +906,7 @@ export default function SalesPage() {
                         {(cartItems.some(i => i.consumptionMode === 'Local') || (cartItems.some(i => i.beerVariety === 'Variado' && i.consumptionMode === 'Local'))) && (
                             <div className="input-group-large" style={{ marginBottom: '1rem' }}>
                                 <User size={36} strokeWidth={2.5} className="input-icon-external" />
-                                <input type="text" placeholder="Nombre del Cliente" className="ticket-input-large" value={customerName} onChange={(e) => setCustomerName(e.target.value)} autoFocus />
+                                <input type="text" placeholder="Nombre del Cliente (Opcional)" className="ticket-input-large" value={customerName} onChange={(e) => setCustomerName(e.target.value)} autoFocus />
                             </div>
                         )}
 
@@ -955,12 +960,12 @@ export default function SalesPage() {
                     onClick={ticketStep === 0 ? handleInitialCreateClick : handleFinalConfirm}
                     disabled={
                         (ticketStep === 0 && !cartItems.length && !isSelectionComplete() && !(orderState.beerVariety === 'Variado' && orderState.consumptionMode === 'Local' && orderState.emission && orderState.beerType)) ||
-                        (ticketStep === 2 && !paymentMethod) // Explicitly disable if step 2 and no payment
+                        (ticketStep === 2 && !paymentMethod && cartItems.length > 0) // Enable Open Tab confirm without payment
                     }
                     style={{
                         opacity: (
                             (ticketStep === 0 && !cartItems.length && !isSelectionComplete() && !(orderState.beerVariety === 'Variado' && orderState.consumptionMode === 'Local' && orderState.emission && orderState.beerType)) ||
-                            (ticketStep === 2 && !paymentMethod)
+                            (ticketStep === 2 && !paymentMethod && cartItems.length > 0)
                         ) ? 0.5 : 1
                     }}
                 >

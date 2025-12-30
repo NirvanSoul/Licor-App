@@ -576,9 +576,13 @@ h2.card-title {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1rem 1.5rem;
+    padding: 1.2rem 1.5rem;
     background: rgba(0, 0, 0, 0.05);
-    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    border-top: 1px solid rgba(128, 128, 128, 0.1);
+}
+
+.dark .table-footer {
+    background: rgba(255, 255, 255, 0.02);
 }
 
 /* User Badge */
@@ -655,11 +659,11 @@ h2.card-title {
     bottom: 0;
     background: rgba(0, 0, 0, 0.4);
     backdrop-filter: blur(6px);
-    z-index: 1000;
+    z-index: 100000;
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: center;
-    padding: 2rem 1rem;
+    padding: 1rem;
     overflow: hidden;
     /* Prevent overlay from scrolling */
     animation: fadeIn 0.2s ease-out;
@@ -667,7 +671,7 @@ h2.card-title {
 
 @media (min-width: 769px) {
     .report-modal-overlay {
-        padding-top: 140px;
+        padding: 2rem;
     }
 }
 
@@ -695,6 +699,10 @@ h2.card-title {
     align-items: center;
     border-radius: 20px;
     margin: 10px;
+}
+
+.dark .report-modal-header {
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .weekly-modal-header {

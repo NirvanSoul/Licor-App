@@ -99,57 +99,79 @@ export const fetchSales = async (organizationId) => {
 };
 
 export const createSales = async (salesData) => {
-    // salesData is array of orders? App logic seems to send one order usually but name implies multiple.
-    // Looking at previous mock, it accepted an array.
-    // We'll iterate or bulk insert if possible. 
-    // Orders table structure needs parent insert then child insert.
-
-    // NOTE: This usually comes as a single 'order' object from the app context, 
-    // but the mock accepted [ ...newSales ]. 
-    // Let's assume input is an array of orders.
-
     const results = [];
     const errors = [];
 
     for (const sale of salesData) {
-        // 1. Create Order
-        const { items, ...orderInfo } = sale;
-        const { data: orderData, error: orderError } = await supabase
-            .from('orders')
-            .insert([orderInfo])
-            .select()
-            .single();
+        try {
+            // 1. Prepare and Map Order Data (JS camelCase -> DB snake_case)
+            const { items, ...orderInfo } = sale;
 
-        if (orderError) {
-            errors.push(orderError);
-            continue;
+            const mappedOrder = {
+                organization_id: orderInfo.organization_id || orderInfo.organizationId,
+                ticket_number: orderInfo.ticketNumber || orderInfo.ticket_number,
+                customer_name: orderInfo.customerName || orderInfo.customer_name || 'Anónimo',
+                status: orderInfo.status || 'PAID',
+                type: orderInfo.type || 'Llevar',
+                payment_method: orderInfo.paymentMethod || orderInfo.payment_method,
+                reference: orderInfo.reference,
+                total_amount_bs: orderInfo.totalAmountBs || orderInfo.total_amount_bs,
+                total_amount_usd: orderInfo.totalAmountUsd || orderInfo.total_amount_usd,
+                created_at: orderInfo.createdAt || orderInfo.created_at,
+                closed_at: orderInfo.closedAt || orderInfo.closed_at || new Date().toISOString(),
+                created_by: orderInfo.createdBy || orderInfo.created_by,
+                payments: orderInfo.payments || []
+            };
+
+            // 2. Create Order
+            const { data: orderData, error: orderError } = await supabase
+                .from('orders')
+                .insert([mappedOrder])
+                .select()
+                .single();
+
+            if (orderError) throw orderError;
+
+            const orderId = orderData.id;
+
+            // 3. Create Order Items
+            if (items && items.length > 0) {
+                const itemsToInsert = items.map(item => {
+                    const pid = item.productID || item.id;
+                    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pid);
+
+                    return {
+                        order_id: orderId,
+                        product_id: isUUID ? pid : null, // Only send if valid UUID
+                        product_name: item.name || item.beerType,
+                        quantity: item.quantity,
+                        price: item.price,
+                        emission: item.emission,
+                        subtype: item.subtype
+                    };
+                });
+
+                const { error: itemsError } = await supabase
+                    .from('order_items')
+                    .insert(itemsToInsert);
+
+                if (itemsError) {
+                    console.error("Error saving items for order " + orderId, itemsError);
+                    // We don't throw here to keep the order, but it's not ideal
+                }
+            }
+
+            results.push({ ...orderData, items });
+        } catch (err) {
+            console.error("Critical error in createSales loop:", err);
+            errors.push(err);
         }
-
-        const orderId = orderData.id;
-
-        // 2. Create Order Items
-        if (items && items.length > 0) {
-            const itemsToInsert = items.map(item => ({
-                order_id: orderId,
-                product_id: item.productID || item.id, // Adaptation
-                product_name: item.name || item.beerType,
-                quantity: item.quantity,
-                price: item.price,
-                emission: item.emission,
-                subtype: item.subtype
-            }));
-
-            const { error: itemsError } = await supabase
-                .from('order_items')
-                .insert(itemsToInsert);
-
-            if (itemsError) console.error("Error saving items for order " + orderId, itemsError);
-        }
-
-        results.push({ ...orderData, items }); // Return structure
     }
 
-    return { data: results, error: errors.length ? errors : null };
+    return {
+        data: results.length > 0 ? results : null,
+        error: errors.length > 0 ? (errors.length === 1 ? errors[0] : errors) : null
+    };
 };
 
 /* =========================================================================
@@ -183,12 +205,28 @@ export const upsertPrice = async (priceData) => {
 };
 
 /* =========================================================================
-   SETTINGS / EMISSIONS
+   SETTINGS / EMISSIONS / SYNC
    ========================================================================= */
 
 export const fetchSettings = async (organizationId) => {
-    // Could move to DB later
-    return { data: initialSettings, error: null };
+    if (!organizationId) return { data: [], error: 'No Organization ID' };
+
+    const { data, error } = await supabase
+        .from('organization_settings')
+        .select('*')
+        .eq('organization_id', organizationId);
+
+    // If no settings in DB, return mock defaults but we should probably encourage DB usage
+    return { data: data || [], error };
+};
+
+export const upsertSetting = async (organizationId, key, value) => {
+    const { data, error } = await supabase
+        .from('organization_settings')
+        .upsert({ organization_id: organizationId, key, value }, { onConflict: 'organization_id, key' })
+        .select();
+
+    return { data: data ? data[0] : null, error };
 };
 
 export const fetchEmissions = async (organizationId) => {
@@ -203,7 +241,6 @@ export const fetchEmissions = async (organizationId) => {
 };
 
 export const upsertEmission = async (emissionData) => {
-    // emissionData: { organization_id, name, subtype, units }
     const { data, error } = await supabase
         .from('emission_types')
         .upsert(emissionData, { onConflict: 'organization_id, name, subtype' })
@@ -211,6 +248,115 @@ export const upsertEmission = async (emissionData) => {
 
     return { data: data ? data[0] : null, error };
 };
+
+/* =========================================================================
+   COST PRICES
+   ========================================================================= */
+
+export const fetchCostPrices = async (organizationId) => {
+    if (!organizationId) return { data: [], error: 'No Organization ID' };
+
+    const { data, error } = await supabase
+        .from('cost_prices')
+        .select('*')
+        .eq('organization_id', organizationId);
+
+    return { data: data || [], error };
+};
+
+export const upsertCostPrice = async (costData) => {
+    const { data, error } = await supabase
+        .from('cost_prices')
+        .upsert(costData, { onConflict: 'organization_id, product_id, emission, subtype' })
+        .select();
+
+    return { data: data ? data[0] : null, error };
+};
+
+/* =========================================================================
+   PENDING ORDERS
+   ========================================================================= */
+
+export const fetchPendingOrders = async (organizationId) => {
+    if (!organizationId) return { data: [], error: 'No Organization ID' };
+
+    const { data, error } = await supabase
+        .from('pending_orders')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .eq('status', 'OPEN')
+        .order('created_at', { ascending: false });
+
+    return { data: data || [], error };
+};
+
+export const upsertPendingOrder = async (orderData) => {
+    // orderData: { id, organization_id, ticket_number, customer_name, status, type, payment_method, reference, items, payments, created_by }
+    const { data, error } = await supabase
+        .from('pending_orders')
+        .upsert(orderData)
+        .select();
+
+    return { data: data ? data[0] : null, error };
+};
+
+export const deletePendingOrder = async (id) => {
+    const { error } = await supabase
+        .from('pending_orders')
+        .delete()
+        .eq('id', id);
+    return { error };
+};
+
+/* =========================================================================
+   HISTORY (INVENTORY & WASTE)
+   ========================================================================= */
+
+export const fetchInventoryHistory = async (organizationId) => {
+    if (!organizationId) return { data: [], error: 'No Organization ID' };
+
+    const { data, error } = await supabase
+        .from('inventory_history')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false });
+
+    return { data: data || [], error };
+};
+
+export const createInventoryHistory = async (historyData) => {
+    const { data, error } = await supabase
+        .from('inventory_history')
+        .insert([historyData])
+        .select();
+
+    return { data: data ? data[0] : null, error };
+};
+
+export const fetchWasteReports = async (organizationId) => {
+    if (!organizationId) return { data: [], error: 'No Organization ID' };
+
+    const { data, error } = await supabase
+        .from('waste_reports')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false });
+
+    return { data: data || [], error };
+};
+
+export const createWasteReport = async (reportData) => {
+    const { data, error } = await supabase
+        .from('waste_reports')
+        .insert([reportData])
+        .select();
+
+    return { data: data ? data[0] : null, error };
+};
+
+/* =========================================================================
+   DELETIONS & UTILS
+   ========================================================================= */
 
 export const deleteProduct = async (id) => {
     const { error } = await supabase
@@ -230,8 +376,82 @@ export const deleteEmission = async (id) => {
 
 export const resetDatabase = async () => {
     console.warn("Reset Database called - This is destructive in Supabase!");
-    // Requires admin privileges or implementation choice. 
-    // For now, disabling or just clearing local state.
-    localStorage.removeItem('pendingOrders');
+    // For now, only clearing local state flags
+    localStorage.clear();
     return { success: true };
+};
+
+/* =========================================================================
+   LICENSE & ACTIVATION LINKS
+   ========================================================================= */
+
+export const getLicenseByToken = async (token) => {
+    const { data, error } = await supabase
+        .from('license_keys')
+        .select('*')
+        .eq('activation_token', token)
+        .eq('status', 'available')
+        .single();
+    return { data, error };
+};
+
+export const updateLicenseToken = async (keyId, token) => {
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7); // Token valid for 7 days
+
+    const { data, error } = await supabase
+        .from('license_keys')
+        .update({
+            activation_token: token,
+            activation_token_expires_at: expiresAt.toISOString()
+        })
+        .eq('id', keyId)
+        .select()
+        .single();
+    return { data, error };
+};
+
+export const activateLicenseByToken = async (token, organizationId, userEmail) => {
+    // 1. Get License Info
+    const { data: license, error: fetchError } = await getLicenseByToken(token);
+    if (fetchError || !license) return { error: fetchError || 'Licencia no válida o ya usada' };
+
+    // 2. Calculate New Expiry Date
+    const months = license.plan_type === 'yearly' ? 12 : (license.plan_type === 'free' ? 0.25 : 1);
+    const daysToAdd = months * 30.5; // Average month
+
+    const { data: org } = await supabase.from('organizations').select('license_expires_at').eq('id', organizationId).single();
+    let currentExpiry = org?.license_expires_at ? new Date(org.license_expires_at) : new Date();
+    if (currentExpiry < new Date()) currentExpiry = new Date();
+
+    const newExpiry = new Date(currentExpiry);
+    newExpiry.setDate(newExpiry.getDate() + daysToAdd);
+
+    // 3. Update Organization (The Transaction-ish part)
+    const { error: orgUpdateError } = await supabase
+        .from('organizations')
+        .update({
+            is_active: true,
+            license_key: license.key,
+            license_expires_at: newExpiry.toISOString(),
+            plan_type: license.plan_type
+        })
+        .eq('id', organizationId);
+
+    if (orgUpdateError) return { error: orgUpdateError };
+
+    // 4. Mark License as Used
+    const { error: keyUpdateError } = await supabase
+        .from('license_keys')
+        .update({
+            status: 'used',
+            used_by_org_id: organizationId,
+            used_at: new Date().toISOString(),
+            activated_at: new Date().toISOString(),
+            activated_by_email: userEmail,
+            activation_token: null // Clear token after use
+        })
+        .eq('id', license.id);
+
+    return { success: !keyUpdateError, error: keyUpdateError };
 };

@@ -1,9 +1,9 @@
-// ... (Imports remain same)
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '../supabaseClient';
 import { useAuth } from './AuthContext';
 import { useProduct } from './ProductContext';
 import { useNotification } from './NotificationContext';
-import { fetchSales, createSales } from '../services/api';
+import { fetchSales, createSales, fetchPendingOrders, upsertPendingOrder, deletePendingOrder } from '../services/api';
 
 const OrderContext = createContext();
 
@@ -14,23 +14,125 @@ export const OrderProvider = ({ children }) => {
     const { productMap, checkStock, deductStock, addStock, getBsPrice, getPrice, getUnitsPerEmission, emissionOptions } = useProduct();
     const { showNotification } = useNotification();
 
-    // Load from local storage
-    const loadOrders = () => {
-        try {
-            const stored = localStorage.getItem('pendingOrders');
-            return stored ? JSON.parse(stored) : [];
-        } catch (e) {
-            console.error("Error loading orders", e);
-            return [];
-        }
-    };
+    const [pendingOrders, setPendingOrders] = useState([]);
 
-    const [pendingOrders, setPendingOrders] = useState(loadOrders);
-
-    // Persistence
+    // --- Sync Pending Orders and Sales from Supabase ---
     useEffect(() => {
-        localStorage.setItem('pendingOrders', JSON.stringify(pendingOrders));
-    }, [pendingOrders]);
+        if (!organizationId) return;
+
+        const syncData = async () => {
+            try {
+                // 1. Fetch Open Tickets
+                const { data: openOrders } = await fetchPendingOrders(organizationId);
+                if (openOrders) {
+                    setPendingOrders(openOrders.map(o => ({
+                        ...o,
+                        id: o.id,
+                        ticketNumber: o.ticket_number,
+                        customerName: o.customer_name,
+                        createdAt: o.created_at,
+                        createdBy: o.created_by
+                    })));
+                }
+
+                // 2. Fetch Sales History (Optional update to existing logic)
+                // ... (existing history logic stays but we can refine if needed)
+            } catch (err) {
+                console.error("Error syncing data:", err);
+            }
+        };
+        syncData();
+
+        // 3. Realtime Subscription for Pending Orders
+        const pendingChannel = supabase
+            .channel(`pending-orders-${organizationId}`)
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'pending_orders',
+                filter: `organization_id=eq.${organizationId}`
+            }, (payload) => {
+                if (payload.eventType === 'INSERT') {
+                    const newOrder = {
+                        ...payload.new,
+                        ticketNumber: payload.new.ticket_number,
+                        customerName: payload.new.customer_name,
+                        createdAt: payload.new.created_at,
+                        createdBy: payload.new.created_by
+                    };
+                    setPendingOrders(prev => {
+                        if (prev.some(o => o.id === newOrder.id)) return prev;
+                        return [newOrder, ...prev];
+                    });
+                } else if (payload.eventType === 'UPDATE') {
+                    if (payload.new.status === 'PAID') {
+                        setPendingOrders(prev => prev.filter(o => o.id !== payload.new.id));
+                    } else {
+                        const updatedOrder = {
+                            ...payload.new,
+                            ticketNumber: payload.new.ticket_number,
+                            customerName: payload.new.customer_name,
+                            createdAt: payload.new.created_at,
+                            createdBy: payload.new.created_by
+                        };
+                        setPendingOrders(prev => prev.map(o => o.id === updatedOrder.id ? updatedOrder : o));
+                    }
+                } else if (payload.eventType === 'DELETE') {
+                    setPendingOrders(prev => prev.filter(o => o.id !== payload.old.id));
+                }
+            })
+            .subscribe();
+
+        // 4. Realtime Subscription for Sales (Paid Tickets)
+        const salesChannel = supabase
+            .channel(`sales-${organizationId}`)
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'orders',
+                filter: `organization_id=eq.${organizationId}`
+            }, async (payload) => {
+                // Fetch the full sale with items
+                const { data: saleData } = await fetchSales(organizationId);
+                const newSale = (saleData || []).find(s => s.id === payload.new.id);
+
+                if (newSale) {
+                    const transformedSale = {
+                        ...newSale,
+                        status: 'PAID',
+                        items: (newSale.items || []).map(item => ({
+                            ...item,
+                            name: item.product_name,
+                            beerType: item.product_name,
+                            quantity: Number(item.quantity || 1),
+                            price: Number(item.price || 0)
+                        })),
+                        ticketNumber: newSale.ticket_number,
+                        customerName: newSale.customer_name,
+                        totalAmountBs: Number(newSale.total_amount_bs || 0),
+                        totalAmountUsd: Number(newSale.total_amount_usd || 0),
+                        createdAt: newSale.created_at,
+                        closedAt: newSale.closed_at || newSale.created_at,
+                        createdBy: newSale.created_by || 'Desconocido'
+                    };
+
+                    setPendingOrders(prev => {
+                        // Use a Map-like approach or just filter out the old version if it exists
+                        const filtered = prev.filter(o => o.id !== transformedSale.id);
+                        const merged = [transformedSale, ...filtered].sort((a, b) =>
+                            new Date(b.createdAt) - new Date(a.createdAt)
+                        );
+                        return merged.slice(0, 250);
+                    });
+                }
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(pendingChannel);
+            supabase.removeChannel(salesChannel);
+        };
+    }, [organizationId]);
 
     // DEV ONLY: Expose setter for DevTools
     useEffect(() => {
@@ -56,23 +158,39 @@ export const OrderProvider = ({ children }) => {
                                 ...sale,
                                 id: sale.id, // Keep the UUID
                                 status: 'PAID',
-                                items: sale.items || [],
-                                totalAmountBs: sale.total_amount_bs || 0,
-                                totalAmountUsd: sale.total_amount_usd || 0,
+                                items: (sale.items || []).map(item => ({
+                                    ...item,
+                                    name: item.product_name,
+                                    beerType: item.product_name,
+                                    quantity: Number(item.quantity || 1),
+                                    price: Number(item.price || 0)
+                                })),
+                                ticketNumber: sale.ticket_number,
+                                customerName: sale.customer_name,
+                                totalAmountBs: Number(sale.total_amount_bs || 0),
+                                totalAmountUsd: Number(sale.total_amount_usd || 0),
                                 createdAt: sale.created_at,
                                 closedAt: sale.closed_at || sale.created_at,
                                 createdBy: sale.created_by || 'Desconocido'
-                            })).filter(sale => !existingIds.has(sale.id));
+                            }));
 
                             if (remoteSales.length === 0) return prev;
 
-                            // Merge and keep sorted (newest first)
-                            const merged = [...prev, ...remoteSales].sort((a, b) =>
+                            // Use an object to store the latest version of each order by ID
+                            const ordersMap = {};
+
+                            // Add existing orders first
+                            prev.forEach(o => { ordersMap[o.id] = o; });
+
+                            // Let remote sales overwrite them (since they are 'PAID')
+                            remoteSales.forEach(o => { ordersMap[o.id] = o; });
+
+                            // Convert back to array and sort
+                            const merged = Object.values(ordersMap).sort((a, b) =>
                                 new Date(b.createdAt) - new Date(a.createdAt)
                             );
 
-                            // Optional: Limit history to last 200 items to avoid bloated localStorage
-                            return merged.slice(0, 200);
+                            return merged.slice(0, 300);
                         });
                     }
                 } catch (err) {
@@ -85,15 +203,13 @@ export const OrderProvider = ({ children }) => {
 
     // --- Actions ---
 
-    const createOrder = (customerName, items = [], type = 'Local', paymentMethod = null, reference = '') => {
+    const createOrder = async (customerName, items = [], type = 'Local', paymentMethod = null, reference = '') => {
         let initialItems = (items || []).map(item => ({
             ...item,
             addedAt: new Date().toISOString(),
-            // Initialize slots for Variado logic if needed
             slots: (item.beerVariety === 'Variado') ? [item.baseBeer || item.beerType || item.name] : []
         }));
 
-        // If it's a "Carta Abierta" (Empty items, Local type), inject a session item
         if (initialItems.length === 0 && type === 'Local') {
             initialItems = [{
                 id: 'consumption-' + Date.now(),
@@ -107,23 +223,36 @@ export const OrderProvider = ({ children }) => {
             }];
         }
 
-        const newOrder = {
-            id: Date.now().toString(),
-            ticketNumber: Math.floor(1000 + Math.random() * 9000),
-            customerName: customerName || 'Cliente',
+        const newOrderData = {
+            organization_id: organizationId,
+            ticket_number: Math.floor(1000 + Math.random() * 9000),
+            customer_name: customerName || 'Anónimo',
             status: 'OPEN',
             type,
-            paymentMethod, // Store the initial payment method
-            reference, // Store initial reference
-            createdBy: user?.user_metadata?.name || user?.email || 'Desconocido', // Track User
-            createdAt: new Date().toISOString(),
+            payment_method: paymentMethod,
+            reference,
+            created_by: user?.user_metadata?.name || user?.email || 'Desconocido',
             items: initialItems,
             payments: []
         };
 
-        setPendingOrders(prev => [newOrder, ...prev]);
-        showNotification(`Ticket #${newOrder.ticketNumber} Creado`, 'success');
-        return newOrder;
+        const { data, error } = await upsertPendingOrder(newOrderData);
+        if (error) {
+            showNotification('Error al crear ticket en la nube', 'error');
+            return null;
+        }
+
+        const formattedOrder = {
+            ...data,
+            ticketNumber: data.ticket_number,
+            customerName: data.customer_name,
+            createdAt: data.created_at,
+            createdBy: data.created_by
+        };
+
+        setPendingOrders(prev => [formattedOrder, ...prev]);
+        showNotification(`Ticket #${formattedOrder.ticketNumber} Creado`, 'success');
+        return formattedOrder;
     };
 
     const addItemToOrder = async (orderId, item) => {
@@ -167,15 +296,13 @@ export const OrderProvider = ({ children }) => {
         }
 
         // 3. Update State
-        setPendingOrders(prev => prev.map(o => {
-            if (o.id === orderId) {
-                return {
-                    ...o,
-                    items: [...o.items, itemToAdd]
-                };
-            }
-            return o;
-        }));
+        // 3. Update State & DB
+        const updatedItems = [...order.items, itemToAdd];
+        setPendingOrders(prev => prev.map(o => o.id === orderId ? { ...o, items: updatedItems } : o));
+
+        if (organizationId) {
+            await upsertPendingOrder({ id: orderId, organization_id: organizationId, items: updatedItems });
+        }
 
         showNotification(`${beerName} agregado`, 'info', 1500);
     };
@@ -200,15 +327,12 @@ export const OrderProvider = ({ children }) => {
             }
         }
 
-        setPendingOrders(prev => prev.map(o => {
-            if (o.id === orderId) {
-                return {
-                    ...o,
-                    items: o.items.filter(i => i.id !== itemId)
-                };
-            }
-            return o;
-        }));
+        const updatedItems = order.items.filter(i => i.id !== itemId);
+        setPendingOrders(prev => prev.map(o => o.id === orderId ? { ...o, items: updatedItems } : o));
+
+        if (organizationId) {
+            await upsertPendingOrder({ id: orderId, organization_id: organizationId, items: updatedItems });
+        }
     };
 
     const cancelOrder = async (orderId) => {
@@ -233,6 +357,9 @@ export const OrderProvider = ({ children }) => {
         }
 
         setPendingOrders(prev => prev.filter(o => o.id !== orderId));
+        if (organizationId) {
+            await deletePendingOrder(orderId);
+        }
         showNotification('Ticket cancelado', 'info');
     };
 
@@ -424,25 +551,23 @@ export const OrderProvider = ({ children }) => {
 
         // 3. Persist to Network (Supabase)
         try {
-            await createSales([closedOrder]); // API expects array
+            const { error: saleError } = await createSales([closedOrder]);
+            if (saleError) throw saleError;
+
+            if (organizationId) {
+                // DELETE from pending instead of just updating status
+                // This ensures the DELETE event triggers and removes it from other devices
+                await deletePendingOrder(orderId);
+            }
         } catch (err) {
             console.error("Failed to save order to DB", err);
-            // Optionally queue for retry?
+            const msg = err.message || JSON.stringify(err);
+            showNotification(`Error: ${msg}`, 'error');
+            return; // Abort state update
         }
 
-        // 4. Update State (Remove from pending)
-        // Note: Logic allows keeping it in 'pendingOrders' with status PAID if that's the UI flow?
-        // App seems to clear PAID orders from pending view usually? 
-        // Existing logic updated it in place. Let's keep that but maybe user wants it cleared?
-        // If it returns PAID, it might clutter pending list. Usually PAID goes to history.
-        // I will keep existing behavior: Update to PAID in state.
-
-        setPendingOrders(prev => prev.map(o => {
-            if (o.id === orderId) {
-                return closedOrder;
-            }
-            return o;
-        }));
+        // 4. Update local state immediately to 'PAID' so it moves to CashPage
+        setPendingOrders(prev => prev.map(o => o.id === orderId ? closedOrder : o));
 
         const formattedTotal = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(totalBs);
         showNotification(`Ticket Cerrado: ${formattedTotal} Bs`, 'success');
@@ -456,7 +581,7 @@ export const OrderProvider = ({ children }) => {
         const newOrder = {
             id: Date.now().toString(), // Temp ID
             ticketNumber: Math.floor(1000 + Math.random() * 9000),
-            customerName: customerName || 'Venta Directa',
+            customerName: customerName || 'Anónimo',
             status: 'PAID',
             type: 'Llevar',
             paymentMethod,
@@ -485,15 +610,37 @@ export const OrderProvider = ({ children }) => {
 
         // 4. Persist to Network
         try {
-            await createSales([newOrder]);
+            const { data, error: saleError } = await createSales([newOrder]);
+            if (saleError) throw saleError;
+
+            // 5. Update State with DB result (to get real UUID)
+            if (data && data[0]) {
+                const transformedDirectSale = {
+                    ...data[0],
+                    status: 'PAID',
+                    items: (data[0].items || items).map(item => ({
+                        ...item,
+                        name: item.product_name || item.name,
+                        beerType: item.product_name || item.beerType,
+                        quantity: Number(item.quantity || 1),
+                        price: Number(item.price || 0)
+                    })),
+                    customerName: data[0].customer_name,
+                    ticketNumber: data[0].ticket_number,
+                    totalAmountBs: Number(data[0].total_amount_bs || totalBs),
+                    totalAmountUsd: Number(data[0].total_amount_usd || totalUsd),
+                    createdAt: data[0].created_at,
+                    closedAt: data[0].closed_at || data[0].created_at,
+                    createdBy: data[0].created_by || 'Desconocido'
+                };
+                setPendingOrders(prev => [transformedDirectSale, ...prev.filter(o => o.id !== newOrder.id)]);
+                showNotification(`Venta Registrada en Caja`, 'success');
+            }
         } catch (err) {
             console.error("Failed to save direct sale to DB", err);
+            showNotification(`Error al registrar venta directa`, 'error');
         }
 
-        // 5. Update State
-        // Add to pending? Or history? Existing logic added to pending.
-        setPendingOrders(prev => [newOrder, ...prev]);
-        showNotification(`Venta Registrada en Caja`, 'success');
         return newOrder;
     };
 
@@ -529,20 +676,27 @@ export const OrderProvider = ({ children }) => {
         }
 
         // State Update
-        setPendingOrders(prev => prev.map(o => {
-            if (o.id !== orderId) return o;
+        // State Update
+        const updatedItems = [...order.items];
+        const currentItem = updatedItems[itemIndex];
+        const newSlots = currentItem.slots ? [...currentItem.slots] : [];
+        newSlots[slotIndex] = content;
+        const finalSlots = currentItem.emission === 'Libre' ? newSlots.filter(s => s !== null) : newSlots;
+        updatedItems[itemIndex] = { ...currentItem, slots: finalSlots };
 
-            const newItems = [...o.items];
-            const currentItem = newItems[itemIndex];
-            const newSlots = currentItem.slots ? [...currentItem.slots] : [];
+        setPendingOrders(prev => prev.map(o => o.id === orderId ? { ...o, items: updatedItems } : o));
 
-            newSlots[slotIndex] = content;
-            // For Libre, we don't want holes, we want a compact list
-            const finalSlots = currentItem.emission === 'Libre' ? newSlots.filter(s => s !== null) : newSlots;
-            newItems[itemIndex] = { ...currentItem, slots: finalSlots };
+        if (organizationId) {
+            await upsertPendingOrder({ id: orderId, organization_id: organizationId, items: updatedItems });
+        }
+    };
 
-            return { ...o, items: newItems };
-        }));
+    const updateOrderName = async (orderId, newName) => {
+        if (organizationId) {
+            await upsertPendingOrder({ id: orderId, organization_id: organizationId, customer_name: newName });
+        }
+        setPendingOrders(prev => prev.map(o => o.id === orderId ? { ...o, customerName: newName } : o));
+        showNotification('Título actualizado', 'success');
     };
 
     return (
@@ -555,6 +709,7 @@ export const OrderProvider = ({ children }) => {
             cancelOrder,
             processDirectSale,
             updateOrderItemSlot,
+            updateOrderName,
             calculateOrderTotal // Exposed
         }}>
             {children}

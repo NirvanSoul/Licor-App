@@ -22,7 +22,9 @@ export default function Login() {
 
         try {
             await login(email, password);
-            navigate('/vender');
+            const params = new URLSearchParams(window.location.search);
+            const redirectPath = params.get('redirect');
+            navigate(redirectPath || '/vender');
         } catch (err) {
             console.error(err);
             setError('Credenciales inválidas o error de conexión.');
