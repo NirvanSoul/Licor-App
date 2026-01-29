@@ -15,7 +15,8 @@ const BeerDashboardCard = ({ beerName, searchFilter = '' }) => {
         prices,
         beerCategories,
         getCostPrice,
-        getUnitsPerEmission
+        getUnitsPerEmission,
+        getEmissionsForSubtype
     } = useProduct();
 
     const { role } = useAuth();
@@ -24,32 +25,14 @@ const BeerDashboardCard = ({ beerName, searchFilter = '' }) => {
     const canViewCost = role && ['OWNER', 'MANAGER', 'DEVELOPER'].includes(role);
 
     // 1. State Hooks
-    const [subtype, setSubtype] = useState(() => {
-        const category = beerCategories[beerName]?.toLowerCase() || '';
-        return category.includes('lata') ? 'Lata' : 'Botella';
-    });
+    const [subtype, setSubtype] = useState(beerCategories[beerName] || 'Botella');
     const [isExpanded, setIsExpanded] = useState(false);
     const normalizedQuery = searchFilter.toLowerCase();
 
     // 2. Derived Data (Emissions)
-    const emissionsFromList = Array.isArray(emissionOptions)
-        ? emissionOptions.filter(emission => getPrice(beerName, emission, subtype) > 0)
-        : [];
+    // Use the Context Helper to get ALL valid emissions for this subtype (Standard + Custom + Six Pack)
+    const allActiveEmissions = getEmissionsForSubtype(subtype);
 
-    const discoveredEmissions = Object.keys(prices || {}).reduce((acc, key) => {
-        if (!key.startsWith(beerName + '_')) return acc;
-        if (!key.includes(subtype)) return acc;
-        const emissionPart = key.replace(beerName + '_', '').split('_')[0];
-        if (emissionPart) acc.push(emissionPart);
-        return acc;
-    }, []);
-
-    const allActiveEmissions = Array.from(new Set([...emissionsFromList, ...discoveredEmissions]))
-        .sort((a, b) => {
-            const unitsA = getUnitsPerEmission(a, subtype);
-            const unitsB = getUnitsPerEmission(b, subtype);
-            return unitsB - unitsA;
-        });
     // 3. Search Relevance & Visibility
     const searchScore = getGlobalSearchScore(beerName, normalizedQuery, allActiveEmissions);
     const isVisible = normalizedQuery.length < 2 || searchScore > 0;
@@ -61,25 +44,19 @@ const BeerDashboardCard = ({ beerName, searchFilter = '' }) => {
             return;
         }
 
+        // Re-sync subtype with category when data loads
+        const cat = beerCategories[beerName];
+        if (cat && subtype !== cat && !subtype.includes('Botella')) {
+            setSubtype(cat);
+        }
+
         if (!normalizedQuery) return;
 
         // Auto-expand ONLY if it's a strong match (Name match 80+, or Emission match 70+)
         if (searchScore >= 70) {
             setIsExpanded(true);
         }
-
-        // SAFETY CHECK: If category data loads late, update subtype to Lata if needed
-        const category = beerCategories[beerName]?.toLowerCase() || '';
-        if (category.includes('lata') && !subtype.includes('Lata')) {
-            setSubtype('Lata');
-        }
-
-        if (isFuzzyMatch('lata', normalizedQuery) || normalizedQuery.includes('lata')) {
-            setSubtype(prev => prev.includes('Lata') ? prev : 'Lata Pequeña');
-        } else if (isFuzzyMatch('botella', normalizedQuery) || normalizedQuery.includes('botella')) {
-            setSubtype('Botella');
-        }
-    }, [normalizedQuery, searchScore, beerName]);
+    }, [normalizedQuery, searchScore, beerName, beerCategories]);
 
     // 5. Filtered Emissions for Display
     const filteredEmissions = allActiveEmissions.filter(emission => {
