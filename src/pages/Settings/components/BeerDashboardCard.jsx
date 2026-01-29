@@ -13,7 +13,8 @@ const BeerDashboardCard = ({ beerName, searchFilter = '' }) => {
         currentRate,
         prices,
         beerCategories,
-        getCostPrice
+        getCostPrice,
+        getUnitsPerEmission
     } = useProduct();
 
     // 1. State Hooks
@@ -34,8 +35,12 @@ const BeerDashboardCard = ({ beerName, searchFilter = '' }) => {
         return acc;
     }, []);
 
-    const allActiveEmissions = Array.from(new Set([...emissionsFromList, ...discoveredEmissions]));
-
+    const allActiveEmissions = Array.from(new Set([...emissionsFromList, ...discoveredEmissions]))
+        .sort((a, b) => {
+            const unitsA = getUnitsPerEmission(a, subtype);
+            const unitsB = getUnitsPerEmission(b, subtype);
+            return unitsB - unitsA;
+        });
     // 3. Search Relevance & Visibility
     const searchScore = getGlobalSearchScore(beerName, normalizedQuery, allActiveEmissions);
     const isVisible = normalizedQuery.length < 2 || searchScore > 0;
@@ -137,11 +142,34 @@ const BeerDashboardCard = ({ beerName, searchFilter = '' }) => {
                                                 </span>
                                             )}
                                         </div>
-                                        {stock > 0 && emission === 'Caja' && (
-                                            <span style={{ background: '#eef6ff', color: '#007AFF', padding: '2px 8px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
-                                                {stock} Disp.
-                                            </span>
-                                        )}
+                                        {stock > 0 && emission === 'Caja' && (() => {
+                                            const unitsPerBox = getUnitsPerEmission('Caja', subtype) || 1;
+                                            const boxes = Math.floor(stock / unitsPerBox);
+                                            const remainder = stock % unitsPerBox;
+
+                                            let displayStock = '';
+                                            if (boxes > 0 && remainder > 0) {
+                                                displayStock = `${boxes} Cajas + ${remainder} Uds`;
+                                            } else if (boxes > 0) {
+                                                displayStock = `${boxes} Caja${boxes !== 1 ? 's' : ''}`;
+                                            } else {
+                                                displayStock = `${remainder} Uds`;
+                                            }
+
+                                            return (
+                                                <span style={{
+                                                    background: 'rgba(16, 185, 129, 0.1)',
+                                                    color: '#10b981',
+                                                    padding: '4px 10px',
+                                                    borderRadius: '8px',
+                                                    fontSize: '0.8rem',
+                                                    fontWeight: 700,
+                                                    border: '1px solid rgba(16, 185, 129, 0.2)'
+                                                }}>
+                                                    {displayStock} Disp.
+                                                </span>
+                                            );
+                                        })()}
                                     </div>
 
                                     {/* Price Grid: Llevar vs Local */}
@@ -162,7 +190,7 @@ const BeerDashboardCard = ({ beerName, searchFilter = '' }) => {
                                                 <span style={{ fontSize: '0.75rem', fontWeight: 600, opacity: 0.7 }}>PARA LLEVAR</span>
                                             </div>
                                             <span style={{ fontSize: '1.25rem', fontWeight: 700 }}>${standardPrice}</span>
-                                            <span style={{ fontSize: '0.9rem', color: '#34c759', fontWeight: 600 }}>{formatBs(standardPrice)}</span>
+                                            <span style={{ fontSize: '0.9rem', color: '#10B981', fontWeight: 600 }}>{formatBs(standardPrice)}</span>
                                         </div>
 
                                         {/* Consumo Local */}
@@ -178,7 +206,7 @@ const BeerDashboardCard = ({ beerName, searchFilter = '' }) => {
                                                 <span style={{ fontSize: '0.75rem', fontWeight: 600, opacity: 0.7 }}>LOCAL</span>
                                             </div>
                                             <span style={{ fontSize: '1.25rem', fontWeight: 700 }}>${localPrice}</span>
-                                            <span style={{ fontSize: '0.9rem', color: '#34c759', fontWeight: 600 }}>{formatBs(localPrice)}</span>
+                                            <span style={{ fontSize: '0.9rem', color: '#10B981', fontWeight: 600 }}>{formatBs(localPrice)}</span>
                                         </div>
 
                                         {/* Cost Price (Adquisición) */}

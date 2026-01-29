@@ -259,12 +259,17 @@
 
     /* COMPACT MODE PILL - Centered expansion */
     .nav-pill.compact {
-        max-width: 260px;
-        padding: 0.4rem;
-        border-radius: 20px;
+        max-width: 200px;
+        /* Significantly reduced width */
+        padding: 0.2rem;
+        border-radius: 50px;
+        /* Fully rounded */
         background: var(--bg-card);
         backdrop-filter: blur(15px);
         border: 1px solid rgba(255, 255, 255, 0.1);
+        height: 50px;
+        align-items: center;
+        gap: 0;
     }
 
     .dark .nav-pill {
@@ -278,21 +283,26 @@
         flex: 1;
         flex-basis: 0;
         display: flex;
-        flex-direction: row;
+        flex-direction: column;
+        /* Stack icon above text */
         align-items: center;
         justify-content: center;
-        padding: 0.6rem 0;
+        padding: 0.5rem 0;
+        /* Slightly reduced vertical padding */
         border-radius: var(--radius-full);
         transition: all 0.3s ease;
-        gap: 0.5rem;
+        gap: 2px;
+        /* Tighter gap between icon and text */
         position: relative;
         z-index: 1;
     }
 
     /* COMPACT MODE ITEM */
     .nav-pill.compact .nav-item {
-        padding: 0.25rem 0;
+        padding: 0;
         gap: 0;
+        height: 100%;
+        justify-content: center;
     }
 
     /* Active item styling for mobile */
@@ -307,24 +317,23 @@
     }
 
     .nav-label {
-        font-size: 0.75rem;
+        font-size: 0.7rem;
+        /* Slightly smaller for better fit */
         font-weight: 600;
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        max-height: 20px;
-        max-width: 100px;
-        /* Allow expansion */
+        width: 100%;
+        text-align: center;
         opacity: 1;
-        overflow: hidden;
         white-space: nowrap;
+        margin-top: 2px;
     }
 
     /* COMPACT MODE LABEL & ICON */
     .nav-pill.compact .nav-label {
-        max-width: 0;
-        max-height: 0;
+        display: none;
         opacity: 0;
+        width: 0;
         margin: 0;
-        pointer-events: none;
     }
 
     .nav-icon {
@@ -334,7 +343,11 @@
     }
 
     .nav-pill.compact .nav-icon {
-        transform: scale(1.1);
+        width: 22px;
+        /* Smaller icon size */
+        height: 22px;
+        transform: none;
+        /* No scaling up */
     }
 
     .main-content {

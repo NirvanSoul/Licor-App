@@ -2,16 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Activity, MousePointer, Layout, Map, RefreshCcw, Key, Copy, Plus, Trash2, Lock, X, CheckCircle2, Database, RefreshCw, ExternalLink } from 'lucide-react';
+import { Shield, RefreshCcw, Key, Copy, Plus, Trash2, Lock, X, CheckCircle2, Database, RefreshCw, ExternalLink } from 'lucide-react';
 import { generateFakeData, clearAllData } from '../utils/DevDataGenerator';
 
 export default function DeveloperPage() {
     const { role, loading } = useAuth();
     const navigate = useNavigate();
-    const [events, setEvents] = useState([]);
-    const [stats, setStats] = useState({ topElements: [], topPages: [] });
-    const [viewMode, setViewMode] = useState('STATS'); // 'STATS' | 'HEATMAP' | 'LICENSE'
-    const [selectedPath, setSelectedPath] = useState(null);
+    const [viewMode, setViewMode] = useState('LICENSE'); // 'LICENSE' | 'TOOLS'
     const [generatedKeys, setGeneratedKeys] = useState([]);
     const [isGenerating, setIsGenerating] = useState(false);
     const [genPlan, setGenPlan] = useState('monthly'); // 'monthly' | 'yearly' | 'free'
@@ -43,28 +40,6 @@ export default function DeveloperPage() {
 
     const isMobile = windowWidth < 768;
 
-    const fetchEvents = async () => {
-        console.log('[DeveloperPage] Fetching analytics events...');
-        const { data, error } = await supabase
-            .from('analytics_events')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(2000);
-
-        if (error) {
-            console.error('[DeveloperPage] Error fetching events:', error);
-            return;
-        }
-
-        console.log('[DeveloperPage] Events fetched:', data?.length || 0, 'records');
-
-        if (data && data.length > 0) {
-            setEvents(data);
-            processStats(data);
-        } else {
-            console.warn('[DeveloperPage] No events data returned');
-        }
-    };
 
     const fetchKeys = async () => {
         const { data, error } = await supabase
@@ -114,7 +89,6 @@ export default function DeveloperPage() {
 
     useEffect(() => {
         if (role === 'DEVELOPER') {
-            fetchEvents();
             fetchKeys();
             checkMfaStatus();
         }
@@ -315,58 +289,8 @@ export default function DeveloperPage() {
         }
     };
 
-    const processStats = (data) => {
-        const elementCounts = {};
-        const pageCounts = {};
-        const elementUsers = {};
-        const pageUsers = {};
-        const totalUniqueUsers = new Set(data.map(e => e.user_id).filter(Boolean)).size || 1;
-        let totalClicks = 0;
-        let totalNavs = 0;
-
-        data.forEach(e => {
-            if (e.event_type === 'CLICK' && e.element_text) {
-                const key = `${e.element_text} (${e.path})`;
-                elementCounts[key] = (elementCounts[key] || 0) + 1;
-                totalClicks++;
-                if (!elementUsers[key]) elementUsers[key] = new Set();
-                if (e.user_id) elementUsers[key].add(e.user_id);
-            }
-            if (e.event_type === 'NAVIGATE' && e.path) {
-                pageCounts[e.path] = (pageCounts[e.path] || 0) + 1;
-                totalNavs++;
-                if (!pageUsers[e.path]) pageUsers[e.path] = new Set();
-                if (e.user_id) pageUsers[e.path].add(e.user_id);
-            }
-        });
-
-        const topElements = Object.entries(elementCounts)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 10)
-            .map(([label, count]) => ({
-                label, count,
-                pctActions: totalClicks > 0 ? ((count / totalClicks) * 100).toFixed(1) : 0,
-                pctUsers: ((elementUsers[label].size / totalUniqueUsers) * 100).toFixed(1),
-                userCount: elementUsers[label].size
-            }));
-
-        const topPages = Object.entries(pageCounts)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 10)
-            .map(([path, count]) => ({
-                path, count,
-                pctActions: totalNavs > 0 ? ((count / totalNavs) * 100).toFixed(1) : 0,
-                pctUsers: ((pageUsers[path].size / totalUniqueUsers) * 100).toFixed(1),
-                userCount: pageUsers[path].size
-            }));
-
-        setStats({ topElements, topPages });
-        if (!selectedPath && topPages.length > 0) setSelectedPath(topPages[0].path);
-    };
 
     if (loading) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-app)', color: 'white' }}>Cargando...</div>;
-
-    const heatmapPoints = events.filter(e => e.event_type === 'CLICK' && e.path === selectedPath && e.x && e.y);
 
     return (
         <div style={{ padding: isMobile ? '1rem' : '2rem', maxWidth: '1200px', margin: '0 auto', paddingBottom: '100px', minHeight: '100vh', background: 'var(--bg-app)' }}>
@@ -408,8 +332,6 @@ export default function DeveloperPage() {
                 scrollbarWidth: 'none'
             }}>
                 {[
-                    { id: 'STATS', icon: Activity, label: 'Panel' },
-                    { id: 'HEATMAP', icon: Map, label: 'Heatmap' },
                     { id: 'LICENSE', icon: Key, label: 'Licencias' },
                     { id: 'TOOLS', icon: Database, label: 'DevTools' }
                 ].map(tab => (
@@ -439,197 +361,6 @@ export default function DeveloperPage() {
                 ))}
             </div>
 
-            {viewMode === 'STATS' && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap: isMobile ? '1rem' : '2rem' }}>
-                    <div style={{ background: 'var(--bg-card)', padding: isMobile ? '1.25rem' : '2rem', borderRadius: '24px', border: '1px solid var(--accent-light)', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
-                        <h3 style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: 0, fontSize: isMobile ? '1.1rem' : '1.3rem', marginBottom: '1.5rem' }}>
-                            <Layout size={22} color="#3b82f6" /> Navegación
-                        </h3>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                            {stats.topPages.map((p, i) => (
-                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: isMobile ? '10px' : '14px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                    <span style={{ fontWeight: 500, fontSize: isMobile ? '0.85rem' : '1rem' }}>{p.path}</span>
-                                    <span style={{ background: 'rgba(249, 115, 22, 0.15)', color: '#F97316', padding: '4px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 700 }}>{p.pctActions}%</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                    <div style={{ background: 'var(--bg-card)', padding: isMobile ? '1.25rem' : '2rem', borderRadius: '24px', border: '1px solid var(--accent-light)', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
-                        <h3 style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: 0, fontSize: isMobile ? '1.1rem' : '1.3rem', marginBottom: '1.5rem' }}>
-                            <MousePointer size={22} color="#f59e0b" /> Clicks
-                        </h3>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                            {stats.topElements.map((e, i) => (
-                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: isMobile ? '10px' : '14px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                    <span style={{ fontSize: isMobile ? '0.8rem' : '0.9rem', fontWeight: 500 }}>{e.label}</span>
-                                    <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24', padding: '4px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 700 }}>{e.pctActions}%</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {viewMode === 'HEATMAP' && (() => {
-                // Procesar clicks por elemento para la página seleccionada
-                const clicksByElement = {};
-                events.filter(e => e.event_type === 'CLICK' && e.path === selectedPath && e.element_text)
-                    .forEach(e => {
-                        const key = e.element_text;
-                        if (!clicksByElement[key]) {
-                            clicksByElement[key] = { count: 0, lastClick: e.created_at };
-                        }
-                        clicksByElement[key].count++;
-                    });
-
-                const sortedElements = Object.entries(clicksByElement)
-                    .sort((a, b) => b[1].count - a[1].count)
-                    .slice(0, 10);
-
-                const totalClicksForPath = sortedElements.reduce((sum, [_, data]) => sum + data.count, 0);
-
-                return (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                        {/* Page Selector */}
-                        <div style={{ background: 'var(--bg-card)', padding: isMobile ? '1rem' : '1.5rem', borderRadius: '20px', border: '1px solid var(--accent-light)' }}>
-                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                {stats.topPages.map(p => (
-                                    <button
-                                        key={p.path}
-                                        onClick={() => setSelectedPath(p.path)}
-                                        style={{
-                                            padding: '6px 12px',
-                                            borderRadius: '10px',
-                                            background: selectedPath === p.path ? 'linear-gradient(135deg, #FA8E36 0%, #F97316 100%)' : 'rgba(255,255,255,0.05)',
-                                            color: selectedPath === p.path ? '#fff' : 'var(--text-primary)',
-                                            border: selectedPath === p.path ? 'none' : '1px solid var(--accent-light)',
-                                            cursor: 'pointer',
-                                            fontWeight: 600,
-                                            fontSize: '0.8rem',
-                                            boxShadow: selectedPath === p.path ? '0 4px 12px rgba(249, 115, 22, 0.3)' : 'none'
-                                        }}
-                                    >
-                                        {p.path}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Clicks by Element Table */}
-                        <div style={{ background: 'var(--bg-card)', padding: isMobile ? '1rem' : '1.5rem', borderRadius: '20px', border: '1px solid var(--accent-light)' }}>
-                            <h3 style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: 0, fontSize: '1.1rem', marginBottom: '1rem' }}>
-                                <MousePointer size={20} color="#F97316" />
-                                Elementos más clickeados en <code style={{ background: 'rgba(249, 115, 22, 0.15)', padding: '2px 8px', borderRadius: '6px', color: '#F97316', fontSize: '0.9rem' }}>{selectedPath || '/'}</code>
-                            </h3>
-
-                            {sortedElements.length > 0 ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    {sortedElements.map(([element, data], i) => {
-                                        const percentage = totalClicksForPath > 0 ? ((data.count / totalClicksForPath) * 100).toFixed(1) : 0;
-                                        return (
-                                            <div key={i} style={{
-                                                display: 'flex',
-                                                justifyContent: 'space-between',
-                                                alignItems: 'center',
-                                                padding: '12px 16px',
-                                                borderRadius: '12px',
-                                                background: 'rgba(255,255,255,0.03)',
-                                                border: '1px solid rgba(255,255,255,0.05)',
-                                                position: 'relative',
-                                                overflow: 'hidden'
-                                            }}>
-                                                {/* Progress bar background */}
-                                                <div style={{
-                                                    position: 'absolute',
-                                                    left: 0,
-                                                    top: 0,
-                                                    height: '100%',
-                                                    width: `${percentage}%`,
-                                                    background: 'linear-gradient(90deg, rgba(249, 115, 22, 0.1) 0%, rgba(249, 115, 22, 0.05) 100%)',
-                                                    borderRadius: '12px'
-                                                }} />
-
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', zIndex: 1 }}>
-                                                    <span style={{
-                                                        background: i < 3 ? 'linear-gradient(135deg, #FA8E36 0%, #F97316 100%)' : 'var(--accent-light)',
-                                                        color: i < 3 ? 'white' : 'var(--text-secondary)',
-                                                        width: '24px',
-                                                        height: '24px',
-                                                        borderRadius: '6px',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        fontSize: '0.7rem',
-                                                        fontWeight: 800
-                                                    }}>{i + 1}</span>
-                                                    <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{element}</span>
-                                                </div>
-
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', zIndex: 1 }}>
-                                                    <span style={{
-                                                        background: 'rgba(249, 115, 22, 0.15)',
-                                                        color: '#F97316',
-                                                        padding: '4px 10px',
-                                                        borderRadius: '20px',
-                                                        fontSize: '0.75rem',
-                                                        fontWeight: 700
-                                                    }}>{data.count} clicks</span>
-                                                    <span style={{
-                                                        color: 'var(--text-secondary)',
-                                                        fontSize: '0.75rem',
-                                                        fontWeight: 600,
-                                                        minWidth: '45px',
-                                                        textAlign: 'right'
-                                                    }}>{percentage}%</span>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            ) : (
-                                <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
-                                    <MousePointer size={32} style={{ opacity: 0.3, marginBottom: '0.5rem' }} />
-                                    <p>No hay datos de clicks para esta página</p>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Visual Heatmap (simplified) */}
-                        <div style={{ background: 'var(--bg-card)', padding: isMobile ? '1rem' : '1.5rem', borderRadius: '20px', border: '1px solid var(--accent-light)' }}>
-                            <h3 style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: 0, fontSize: '1.1rem', marginBottom: '1rem' }}>
-                                <Map size={20} color="#10b981" />
-                                Mapa de Posiciones
-                                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 400 }}>({heatmapPoints.length} puntos)</span>
-                            </h3>
-                            <div style={{ position: 'relative', width: '100%', height: isMobile ? '300px' : '400px', background: 'rgba(0,0,0,0.2)', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--accent-light)' }}>
-                                {heatmapPoints.map((pt, i) => (
-                                    <div
-                                        key={i}
-                                        title={pt.element_text || 'Click'}
-                                        style={{
-                                            position: 'absolute',
-                                            left: `${(pt.x / (pt.viewport_w || 1)) * 100}%`,
-                                            top: `${(pt.y / (pt.viewport_h || 1)) * 100}%`,
-                                            width: isMobile ? '10px' : '14px',
-                                            height: isMobile ? '10px' : '14px',
-                                            background: 'radial-gradient(circle, #F97316 0%, rgba(249, 115, 22, 0) 70%)',
-                                            opacity: 0.7,
-                                            borderRadius: '50%',
-                                            transform: 'translate(-50%, -50%)',
-                                            cursor: 'pointer'
-                                        }}
-                                    />
-                                ))}
-                                {heatmapPoints.length === 0 && (
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)' }}>
-                                        Sin datos de posición
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                );
-            })()}
 
             {viewMode === 'LICENSE' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? '1.5rem' : '2.5rem' }}>

@@ -37,7 +37,7 @@ export default function ProfitModal({
                             <span className="stat-label">Valor del Inventario (Costo)</span>
                         </div>
                         <h2 className="hero-value" style={{ color: 'var(--text-primary)' }}>
-                            {currencySymbol}{inventoryValue.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                            {currencySymbol}{inventoryValue.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </h2>
                         <p className="stat-subtext">Capital invertido en mercancía actual</p>
                     </div>
@@ -48,11 +48,11 @@ export default function ProfitModal({
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                             <div className="dashboard-card bg-gray-soft">
                                 <span className="stat-label">Ingresos (Semana)</span>
-                                <h3 className="stat-value">{currencySymbol}{weekRevenue.toFixed(0)}</h3>
+                                <h3 className="stat-value">{currencySymbol}{weekRevenue.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
                             </div>
                             <div className="dashboard-card bg-gray-soft">
                                 <span className="stat-label">Costo Mercancía</span>
-                                <h3 className="stat-value text-red">-{currencySymbol}{weekCOGS.toFixed(0)}</h3>
+                                <h3 className="stat-value text-red">-{currencySymbol}{weekCOGS.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
                             </div>
                         </div>
 
@@ -61,12 +61,12 @@ export default function ProfitModal({
                                 <div>
                                     <span className="stat-label" style={{ color: '#059669', fontWeight: 700 }}>Ganancia Neta Est.</span>
                                     <h2 className="hero-value" style={{ color: '#059669' }}>
-                                        {currencySymbol}{weekNet.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                                        {currencySymbol}{weekNet.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </h2>
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
                                     <span className="stat-label">Margen</span>
-                                    <h3 className="stat-value" style={{ color: '#059669' }}>{weekMargin.toFixed(1)}%</h3>
+                                    <h3 className="stat-value" style={{ color: '#059669' }}>{weekMargin.toFixed(2)}%</h3>
                                 </div>
                             </div>
                         </div>

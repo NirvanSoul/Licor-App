@@ -23,70 +23,42 @@ import ProfitModal from './modals/ProfitModal';
 
 export default function CashPage() {
     const { role } = useAuth();
-    const { pendingOrders } = useOrder();
+    const { pendingOrders, loading: orderLoading } = useOrder();
     const productContext = useProduct();
+    const { productLoading } = productContext || {};
     const { showNotification } = useNotification();
 
-    // Security Check
-    const isAuthorized = role === 'OWNER' || role === 'MANAGER';
-    if (!isAuthorized) {
-        return (
-            <div style={{
-                height: '100%', display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center',
-                color: 'var(--text-secondary)', padding: '2rem', textAlign: 'center'
-            }}>
-                <div style={{
-                    width: '80px', height: '80px', borderRadius: '50%',
-                    background: 'rgba(239, 68, 68, 0.1)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    marginBottom: '1.5rem'
-                }}>
-                    <ShieldAlert size={40} color="#EF4444" />
-                </div>
-                <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
-                    Acceso Restringido
-                </h2>
-                <p style={{ maxWidth: '400px', lineHeight: '1.6' }}>
-                    Los reportes de caja y análisis financiero solo están disponibles para Dueños y Administradores.
-                </p>
-                <div style={{ marginTop: '2rem', padding: '1rem', background: 'var(--bg-card-hover)', borderRadius: '12px' }}>
-                    <span style={{ fontWeight: 600 }}>Tu Rol Actual:</span> <span style={{ color: 'var(--accent-color)', fontWeight: 800 }}>{role || 'Indefinido'}</span>
-                </div>
-            </div>
-        );
-    }
-
-    if (!pendingOrders || !productContext) return <div className="p-8 text-center text-gray-500">Cargando datos...</div>;
+    // 1. Move Analytics Hook to Top (Safe with fallbacks)
+    const analytics = useCashAnalytics({
+        pendingOrders: pendingOrders || [],
+        ...(productContext || {})
+    });
 
     const {
         todayStats,
         todaysSales,
-        paymentMethods, // Used inside hook but possibly needed for direct display? Not used in restoration plan for now.
         weeklyStats,
         profitStats,
         lowStockConnect,
         topProducts
-    } = useCashAnalytics({
-        pendingOrders,
-        ...productContext
-    });
+    } = analytics;
 
-    // UI State
+    // 2. UI State Hooks
     const [showDailyDetailModal, setShowDailyDetailModal] = useState(false);
     const [dailyDetailDate, setDailyDetailDate] = useState(new Date());
     const [showProfitModal, setShowProfitModal] = useState(false);
     const [showWeeklyModal, setShowWeeklyModal] = useState(false);
 
-    // Lock Scroll
+    // 3. Security Check (After Hooks)
+    const isAuthorized = role === 'OWNER' || role === 'MANAGER' || role === 'DEVELOPER';
+
+    // 4. Side Effects
     useEffect(() => {
         if (showDailyDetailModal || showProfitModal || showWeeklyModal) {
             document.body.style.overflow = 'hidden';
-            // Disparar evento para ocultar menú en desktop
             window.dispatchEvent(new CustomEvent('modalopen'));
         } else {
             document.body.style.overflow = 'unset';
-            // Disparar evento para mostrar menú en desktop
             window.dispatchEvent(new CustomEvent('modalclose'));
         }
         return () => {
@@ -95,7 +67,6 @@ export default function CashPage() {
         };
     }, [showDailyDetailModal, showProfitModal, showWeeklyModal]);
 
-    // Listen for Menu Reset
     useEffect(() => {
         const handleResetFlow = (e) => {
             if (e.detail === '/caja') {
@@ -109,23 +80,7 @@ export default function CashPage() {
         return () => window.removeEventListener('reset-flow', handleResetFlow);
     }, []);
 
-    // Helpers
-    const displayPayment = (method) => {
-        if (!method || method === 'Cash') return 'Efectivo';
-        if (typeof method === 'string' && method.startsWith('Pre-Pagado - ')) return method.replace('Pre-Pagado - ', '');
-        return String(method);
-    };
-
-    const getShortPayment = (method) => {
-        const full = displayPayment(method);
-        if (full.includes('Efectivo')) return 'EF';
-        if (full.includes('Pago Móvil') || full.includes('Pago Movil')) return 'PM';
-        if (full.includes('Bio Pago') || full.includes('BioPago')) return 'BP';
-        if (full.includes('Punto')) return 'PU';
-        return full.substring(0, 2).toUpperCase();
-    };
-
-    // Calculate Daily Hourly Stats on demand for the modal
+    // 5. Statistics Calculation (Must be before early returns)
     const getSalesForDate = (date) => {
         const targetDate = new Date(date);
         targetDate.setHours(0, 0, 0, 0);
@@ -146,15 +101,14 @@ export default function CashPage() {
         sales.forEach(sale => {
             const date = new Date(sale.closedAt || sale.createdAt);
             const hour = date.getHours();
-            const total = (sale.totalAmountUsd !== undefined && sale.totalAmountUsd !== null) ? Number(sale.totalAmountUsd) : 0; // Simplified
+            const total = (sale.totalAmountUsd !== undefined && sale.totalAmountUsd !== null) ? Number(sale.totalAmountUsd) : 0;
 
             hourlyData[hour] += total;
             totalSales += total;
 
             (sale.items || []).forEach(item => {
                 const name = item.beerType || item.name || 'Desconocido';
-                const subtype = item.subtype || 'Botella';
-                const units = (item.quantity || 1); // Simplify units calculation for quick view
+                const units = (item.quantity || 1);
                 if (!productCounts[name]) productCounts[name] = 0;
                 productCounts[name] += units;
             });
@@ -183,6 +137,57 @@ export default function CashPage() {
         };
     }, [dailyDetailDate, pendingOrders]);
 
+    // 6. Early Returns (UI Rendering)
+    if (!isAuthorized) {
+        return (
+            <div style={{
+                height: '100%', display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center',
+                color: 'var(--text-secondary)', padding: '2rem', textAlign: 'center'
+            }}>
+                <div style={{
+                    width: '80px', height: '80px', borderRadius: '50%',
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    marginBottom: '1.5rem'
+                }}>
+                    <ShieldAlert size={40} color="#EF4444" />
+                </div>
+                <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
+                    Acceso Restringido
+                </h2>
+                <p style={{ maxWidth: '400px', lineHeight: '1.6' }}>
+                    Los reportes de caja y análisis financiero solo están disponibles para Dueños y Administradores.
+                </p>
+                <div style={{ marginTop: '2rem', padding: '1rem', background: 'var(--bg-card-hover)', borderRadius: '12px' }}>
+                    <span style={{ fontWeight: 600 }}>Tu Rol Actual:</span> <span style={{ color: 'var(--accent-color)', fontWeight: 800 }}>{role || 'Indefinido'}</span>
+                </div>
+            </div>
+        );
+    }
+
+    // SILENT LOADING: Only show full-page loading if we have absolutely NO data (initial load)
+    const hasData = (pendingOrders && pendingOrders.length > 0) || (productContext && Object.keys(productContext.inventory || {}).length > 0);
+    if ((orderLoading || productLoading) && !hasData) {
+        return <div className="p-8 text-center text-gray-500">Cargando datos maestros de caja...</div>;
+    }
+
+
+    // 7. Helpers
+    const displayPayment = (method) => {
+        if (!method || method === 'Cash') return 'Efectivo';
+        if (typeof method === 'string' && method.startsWith('Pre-Pagado - ')) return method.replace('Pre-Pagado - ', '');
+        return String(method);
+    };
+
+    const getShortPayment = (method) => {
+        const full = displayPayment(method);
+        if (full.includes('Efectivo')) return 'EF';
+        if (full.includes('Pago Móvil') || full.includes('Pago Movil')) return 'PM';
+        if (full.includes('Bio Pago') || full.includes('BioPago')) return 'BP';
+        if (full.includes('Punto')) return 'PU';
+        return full.substring(0, 2).toUpperCase();
+    };
 
     const handleShareSale = (sale) => {
         // Logic for sharing (copied simplified version)

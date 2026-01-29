@@ -205,8 +205,8 @@ input[type=number].no-spin {
 
 /* Global Primary Gradient Button */
 .btn-primary-gradient {
-  background: linear-gradient(135deg, #FA8E36 0%, #F97316 100%) !important;
-  color: white !important;
+  background: linear-gradient(135deg, #FA8E36 0%, #F97316 100%);
+  color: white;
   padding: 1rem;
   border-radius: 16px;
   border: none;

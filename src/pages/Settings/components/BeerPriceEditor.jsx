@@ -18,6 +18,7 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
         updatePendingCostPrice,
         getPendingCostPrice,
         hasPendingCostPrice,
+        getUnitsPerEmission,
         currencySymbol,
         currentRate,
         beerCategories
@@ -46,10 +47,15 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
     }, [searchFilter, beerName]);
 
     // Memoize calculating emissions to prevent infinite render loop
-    const emissions = React.useMemo(() =>
-        getEmissionsForSubtype(subtype),
-        [getEmissionsForSubtype, subtype]
-    );
+    const emissions = React.useMemo(() => {
+        const raw = getEmissionsForSubtype(subtype);
+        // Sort from largest to smallest (Caja > Media Caja > Unidad, etc.)
+        return [...raw].sort((a, b) => {
+            const unitsA = getUnitsPerEmission(a, subtype);
+            const unitsB = getUnitsPerEmission(b, subtype);
+            return unitsB - unitsA;
+        });
+    }, [getEmissionsForSubtype, getUnitsPerEmission, subtype]);
 
     // Filter emissions if searching
     const filteredEmissions = emissions.filter(e => {
@@ -112,10 +118,43 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
 
         if (type === 'cost') {
             updatePendingCostPrice(beerName, emission, subtype, usdValue);
+
+            // AUTO-CASCADE COST: If we update 'Caja', calculate and set cost for ALL others
+            if (emission === 'Caja') {
+                const caixaUnits = getUnitsPerEmission('Caja', subtype) || 1;
+                const unitPriceCost = usdValue / caixaUnits;
+
+                setPriceMap(prev => {
+                    const newMap = { ...prev };
+                    emissions.forEach(emi => {
+                        if (emi === 'Caja') return;
+                        const emiUnits = getUnitsPerEmission(emi, subtype);
+                        const emiCostUSD = unitPriceCost * emiUnits;
+
+                        // Update DB/Pending
+                        updatePendingCostPrice(beerName, emi, subtype, emiCostUSD);
+
+                        // Update local state display
+                        const emiCostVal = currencyMode === 'USD' ? emiCostUSD : (emiCostUSD * rate);
+                        newMap[emi] = {
+                            ...newMap[emi],
+                            cost: emiCostVal > 0 ? emiCostVal.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''
+                        };
+                    });
+                    return newMap;
+                });
+            }
         } else {
             const isLocal = type === 'local';
             updatePendingPrice(beerName, emission, subtype, usdValue, isLocal);
         }
+    };
+
+    // Helper to safely parse localized price strings back to numbers for calculation
+    const parseCurrencyString = (str) => {
+        if (!str) return 0;
+        // Remove thousand separators (.) and replace decimal separator (,) with (.)
+        return parseFloat(str.replace(/\./g, '').replace(',', '.')) || 0;
     };
 
     // Helper to check if an emission has any pending changes
@@ -300,8 +339,8 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
                                         />
                                         <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textAlign: 'right', marginTop: '2px', opacity: 0.8 }}>
                                             {currencyMode === 'BS'
-                                                ? `≈ ${currencySymbol}${(parseFloat(priceMap[emission]?.standard || 0) / (currentRate || 1)).toFixed(2)}`
-                                                : `≈ Bs. ${(parseFloat(priceMap[emission]?.standard || 0) * (currentRate || 1)).toLocaleString('es-VE', { maximumFractionDigits: 2 })}`}
+                                                ? `≈ ${currencySymbol}${(parseCurrencyString(priceMap[emission]?.standard) / (currentRate || 1)).toFixed(2)}`
+                                                : `≈ Bs. ${(parseCurrencyString(priceMap[emission]?.standard) * (currentRate || 1)).toLocaleString('es-VE', { maximumFractionDigits: 2 })}`}
                                         </span>
                                     </div>
 
@@ -335,8 +374,8 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
                                         />
                                         <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textAlign: 'right', marginTop: '2px', opacity: 0.8 }}>
                                             {currencyMode === 'BS'
-                                                ? `≈ ${currencySymbol}${(parseFloat(priceMap[emission]?.local || 0) / (currentRate || 1)).toFixed(2)}`
-                                                : `≈ Bs. ${(parseFloat(priceMap[emission]?.local || 0) * (currentRate || 1)).toLocaleString('es-VE', { maximumFractionDigits: 2 })}`}
+                                                ? `≈ ${currencySymbol}${(parseCurrencyString(priceMap[emission]?.local) / (currentRate || 1)).toFixed(2)}`
+                                                : `≈ Bs. ${(parseCurrencyString(priceMap[emission]?.local) * (currentRate || 1)).toLocaleString('es-VE', { maximumFractionDigits: 2 })}`}
                                         </span>
                                     </div>
 
@@ -377,8 +416,8 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
                                         />
                                         <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textAlign: 'right', marginTop: '2px', opacity: 0.8, fontWeight: 500 }}>
                                             {currencyMode === 'BS'
-                                                ? `≈ ${currencySymbol}${(parseFloat(priceMap[emission]?.cost || 0) / (currentRate || 1)).toFixed(2)}`
-                                                : `≈ Bs. ${(parseFloat(priceMap[emission]?.cost || 0) * (currentRate || 1)).toLocaleString('es-VE', { maximumFractionDigits: 2 })}`}
+                                                ? `≈ ${currencySymbol}${(parseCurrencyString(priceMap[emission]?.cost) / (currentRate || 1)).toFixed(2)}`
+                                                : `≈ Bs. ${(parseCurrencyString(priceMap[emission]?.cost) * (currentRate || 1)).toLocaleString('es-VE', { maximumFractionDigits: 2 })}`}
                                         </span>
                                     </div>
                                 </div>

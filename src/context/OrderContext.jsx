@@ -15,35 +15,86 @@ export const OrderProvider = ({ children }) => {
     const { showNotification } = useNotification();
 
     const [pendingOrders, setPendingOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-    // --- Sync Pending Orders and Sales from Supabase ---
+    // --- Unified Initial Data Sync ---
     useEffect(() => {
-        if (!organizationId) return;
+        if (!organizationId) {
+            setLoading(false);
+            return;
+        }
 
-        const syncData = async () => {
+        const syncInitialData = async () => {
+            // SILENT UPDATE: Only show loading if we have NO data yet
+            const isInitialLoad = pendingOrders.length === 0;
+            if (isInitialLoad) setLoading(true);
+
             try {
-                // 1. Fetch Open Tickets
-                const { data: openOrders } = await fetchPendingOrders(organizationId);
-                if (openOrders) {
-                    setPendingOrders(openOrders.map(o => ({
-                        ...o,
-                        id: o.id,
-                        ticketNumber: o.ticket_number || '0000',
-                        customerName: o.customer_name || 'Anónimo',
-                        createdAt: o.created_at,
-                        createdBy: o.created_by || 'Sistema'
-                    })));
+                console.log("🔄 [OrderContext] Syncing data (Silent:", !isInitialLoad, ")");
+
+                // Fetch both in parallel for speed
+                const [pendingRes, salesRes] = await Promise.all([
+                    fetchPendingOrders(organizationId),
+                    fetchSales(organizationId)
+                ]);
+
+                const allOrdersMap = {};
+
+                // 1. Process Pending Orders (OPEN)
+                if (pendingRes.data) {
+                    pendingRes.data.forEach(o => {
+                        allOrdersMap[o.id] = {
+                            ...o,
+                            ticketNumber: o.ticket_number || '0000',
+                            customerName: o.customer_name || 'Anónimo',
+                            createdAt: o.created_at,
+                            createdBy: o.created_by || 'Sistema'
+                        };
+                    });
                 }
 
-                // 2. Fetch Sales History (Optional update to existing logic)
-                // ... (existing history logic stays but we can refine if needed)
+                // 2. Process Sales History (PAID) - These overwrite pending if same ID exists (safety)
+                if (salesRes.data) {
+                    salesRes.data.forEach(sale => {
+                        allOrdersMap[sale.id] = {
+                            ...sale,
+                            status: 'PAID',
+                            items: (sale.items || []).map(item => ({
+                                ...item,
+                                name: item.product_name || item.name || 'Producto',
+                                beerType: item.product_name || item.beerType || 'Producto',
+                                quantity: Number(item.quantity || 1),
+                                price: Number(item.price || 0)
+                            })),
+                            ticketNumber: sale.ticket_number || '0000',
+                            customerName: sale.customer_name || 'Anónimo',
+                            totalAmountBs: Number(sale.total_amount_bs || 0),
+                            totalAmountUsd: Number(sale.total_amount_usd || 0),
+                            paymentMethod: sale.payment_method,
+                            reference: sale.reference,
+                            createdAt: sale.created_at,
+                            closedAt: sale.closed_at || sale.created_at,
+                            createdBy: sale.created_by || 'Sistema'
+                        };
+                    });
+                }
+
+                const merged = Object.values(allOrdersMap).sort((a, b) =>
+                    new Date(b.createdAt) - new Date(a.createdAt)
+                );
+
+                setPendingOrders(merged.slice(0, 300));
+                console.log(`✅ [OrderContext] Sync complete. Loaded ${merged.length} orders.`);
             } catch (err) {
-                console.error("Error syncing data:", err);
+                console.error("❌ [OrderContext] Error syncing initial data:", err);
+            } finally {
+                setLoading(false);
             }
         };
-        syncData();
 
-        // 3. Realtime Subscription for Pending Orders
+        syncInitialData();
+
+        // --- Realtime Subscriptions ---
         const pendingChannel = supabase
             .channel(`pending-orders-${organizationId}`)
             .on('postgres_changes', {
@@ -68,24 +119,17 @@ export const OrderProvider = ({ children }) => {
                     if (payload.new.status === 'PAID') {
                         setPendingOrders(prev => prev.filter(o => o.id !== payload.new.id));
                     } else {
-                        // MERGE strategy: Keep existing local fields if not present in payload (safety)
-                        // But rely on payload for truth. 'items' is the key.
                         setPendingOrders(prev => prev.map(o => {
                             if (o.id !== payload.new.id) return o;
-
-                            // Create updated object merging existing 'o' with 'payload.new'
-                            const merged = {
+                            return {
                                 ...o,
                                 ...payload.new,
-                                // Enforce CamelCase mappings again in case payload.new overwrote them with undefined (unlikely but safe)
-                                // or if payload.new has new values for them
                                 ticketNumber: payload.new.ticket_number || o.ticketNumber,
                                 customerName: payload.new.customer_name || o.customerName,
                                 createdAt: payload.new.created_at || o.createdAt,
                                 createdBy: payload.new.created_by || o.createdBy,
-                                items: payload.new.items || o.items // Critical: If payload has items, use them. If not (partial update?), keep local.
+                                items: payload.new.items || o.items
                             };
-                            return merged;
                         }));
                     }
                 } else if (payload.eventType === 'DELETE') {
@@ -94,7 +138,6 @@ export const OrderProvider = ({ children }) => {
             })
             .subscribe();
 
-        // 4. Realtime Subscription for Sales (Paid Tickets)
         const salesChannel = supabase
             .channel(`sales-${organizationId}`)
             .on('postgres_changes', {
@@ -103,7 +146,6 @@ export const OrderProvider = ({ children }) => {
                 table: 'orders',
                 filter: `organization_id=eq.${organizationId}`
             }, async (payload) => {
-                // Fetch the full sale with items
                 const { data: saleData } = await fetchSales(organizationId);
                 const newSale = (saleData || []).find(s => s.id === payload.new.id);
 
@@ -122,18 +164,19 @@ export const OrderProvider = ({ children }) => {
                         customerName: newSale.customer_name || 'Anónimo',
                         totalAmountBs: Number(newSale.total_amount_bs || 0),
                         totalAmountUsd: Number(newSale.total_amount_usd || 0),
+                        paymentMethod: newSale.payment_method,
+                        reference: newSale.reference,
                         createdAt: newSale.created_at,
                         closedAt: newSale.closed_at || newSale.created_at,
                         createdBy: newSale.created_by || 'Sistema'
                     };
 
                     setPendingOrders(prev => {
-                        // Use a Map-like approach or just filter out the old version if it exists
                         const filtered = prev.filter(o => o.id !== transformedSale.id);
                         const merged = [transformedSale, ...filtered].sort((a, b) =>
                             new Date(b.createdAt) - new Date(a.createdAt)
                         );
-                        return merged.slice(0, 250);
+                        return merged.slice(0, 300);
                     });
                 }
             })
@@ -143,73 +186,6 @@ export const OrderProvider = ({ children }) => {
             supabase.removeChannel(pendingChannel);
             supabase.removeChannel(salesChannel);
         };
-    }, [organizationId]);
-
-    // DEV ONLY: Expose setter for DevTools
-    useEffect(() => {
-        window.__DEV_SET_ORDERS__ = setPendingOrders;
-        return () => { delete window.__DEV_SET_ORDERS__; };
-    }, []);
-
-    // --- Sync Sales History from Supabase ---
-    useEffect(() => {
-        if (organizationId) {
-            const syncSales = async () => {
-                try {
-                    const { data, error } = await fetchSales(organizationId);
-                    if (error) throw error;
-
-                    if (data) {
-                        setPendingOrders(prev => {
-                            // Map of existing IDs (including the DB UUIDs and local IDs)
-                            const existingIds = new Set(prev.map(o => o.id));
-
-                            // Transform remote sales to match local order structure
-                            const remoteSales = data.map(sale => ({
-                                ...sale,
-                                id: sale.id, // Keep the UUID
-                                status: 'PAID',
-                                items: (sale.items || []).map(item => ({
-                                    ...item,
-                                    name: item.product_name || item.name || 'Producto',
-                                    beerType: item.product_name || item.beerType || 'Producto',
-                                    quantity: Number(item.quantity || 1),
-                                    price: Number(item.price || 0)
-                                })),
-                                ticketNumber: sale.ticket_number || '0000',
-                                customerName: sale.customer_name || 'Anónimo',
-                                totalAmountBs: Number(sale.total_amount_bs || 0),
-                                totalAmountUsd: Number(sale.total_amount_usd || 0),
-                                createdAt: sale.created_at,
-                                closedAt: sale.closed_at || sale.created_at,
-                                createdBy: sale.created_by || 'Sistema'
-                            }));
-
-                            if (remoteSales.length === 0) return prev;
-
-                            // Use an object to store the latest version of each order by ID
-                            const ordersMap = {};
-
-                            // Add existing orders first
-                            prev.forEach(o => { ordersMap[o.id] = o; });
-
-                            // Let remote sales overwrite them (since they are 'PAID')
-                            remoteSales.forEach(o => { ordersMap[o.id] = o; });
-
-                            // Convert back to array and sort
-                            const merged = Object.values(ordersMap).sort((a, b) =>
-                                new Date(b.createdAt) - new Date(a.createdAt)
-                            );
-
-                            return merged.slice(0, 300);
-                        });
-                    }
-                } catch (err) {
-                    console.error("Error syncing sales:", err);
-                }
-            };
-            syncSales();
-        }
     }, [organizationId]);
 
     // --- Actions ---
@@ -543,7 +519,11 @@ export const OrderProvider = ({ children }) => {
                         }
                     });
                 } else {
-                    optimizedItems.push(item);
+                    // Ensure price is defined for DB constraint
+                    optimizedItems.push({
+                        ...item,
+                        price: item.price !== undefined ? item.price : (item.unitPriceUsd || 0)
+                    });
                 }
             });
         }
@@ -667,6 +647,8 @@ export const OrderProvider = ({ children }) => {
                     ticketNumber: data[0].ticket_number || '0000',
                     totalAmountBs: Number(data[0].total_amount_bs || totalBs),
                     totalAmountUsd: Number(data[0].total_amount_usd || totalUsd),
+                    paymentMethod: data[0].payment_method,
+                    reference: data[0].reference,
                     createdAt: data[0].created_at,
                     closedAt: data[0].closed_at || data[0].created_at,
                     createdBy: data[0].created_by || 'Sistema'
@@ -742,6 +724,7 @@ export const OrderProvider = ({ children }) => {
     return (
         <OrderContext.Provider value={{
             pendingOrders,
+            loading,
             createOrder,
             addItemToOrder,
             removeItemFromOrder,

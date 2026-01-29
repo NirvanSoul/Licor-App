@@ -1,8 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useProduct } from '../context/ProductContext';
 import { useOrder } from '../context/OrderContext';
-import { Minus, Plus, Box, Package, ChevronDown, ChevronUp, Layers, Trash2, AlertTriangle, Check } from 'lucide-react';
+import { Minus, Plus, Box, Package, ChevronDown, ChevronUp, Layers, Trash2, AlertTriangle, Check, Search } from 'lucide-react';
 import ContainerSelector from './ContainerSelector';
 
 // --- REAL TIME STOCK CALCULATION HELPER ---
@@ -209,7 +209,7 @@ const StockRow = ({ beer, subtype, emission, icon: Icon }) => {
     );
 };
 
-export default function StockManager() {
+export default function StockManager({ initialSearch }) {
     const {
         beerTypes,
         getInventory,
@@ -229,6 +229,22 @@ export default function StockManager() {
     const [wasteSectionOpen, setWasteSectionOpen] = useState(false);
     const [expandedSections, setExpandedSections] = useState({});
     const [beerSubtypes, setBeerSubtypes] = useState({});
+    const [searchQuery, setSearchQuery] = useState(initialSearch || '');
+
+    // Auto-expand and search on initial guide
+    useEffect(() => {
+        if (initialSearch) {
+            setSearchQuery(initialSearch);
+            setExpandedSections(prev => ({ ...prev, [initialSearch]: true }));
+
+            // Set subtype if needed
+            if (!beerSubtypes[initialSearch]) {
+                const category = beerCategories[initialSearch] || 'Botella';
+                const defaultSub = category.toLowerCase().includes('lata') ? 'Lata Pequeña' : 'Botella';
+                setBeerSubtypes(prev => ({ ...prev, [initialSearch]: defaultSub }));
+            }
+        }
+    }, [initialSearch, beerCategories]);
 
     // Summary Items (Only for normal inventory)
     const summaryItems = [];
@@ -288,22 +304,25 @@ export default function StockManager() {
                         Historial
                     </button>
                 </div>
+
+                {/* Search Bar */}
+                <div className="app-search-container" style={{ marginBottom: '1rem' }}>
+                    <Search className="app-search-icon" size={20} />
+                    <input
+                        type="text"
+                        placeholder="Buscar en inventario..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="app-search-input"
+                    />
+                </div>
             </div>
 
             <div className="stock-grid" style={{ display: 'grid', gap: '1rem' }}>
                 {Array.isArray(beerTypes) && beerTypes
                     .filter(beer => {
-                        const category = beerCategories[beer];
-                        if (category) {
-                            // If product is only one type, it only shows up there.
-                            // But wait, StockManager shows a list of cards, and each card has its own subtype toggle.
-                            // If a product is BOTTLE ONLY, should it NOT show up in the inventory list if I'm looking for cans?
-                            // StockManager doesn't have a global "Bottle/Can" toggle, it's PER CARD.
-                            // So we should probably show the card if it belongs to ANY selected subtype in its history/settings.
-                            // Actually, let's keep it simple: if it has a category, it belongs to that.
-                            return true; // We show all cards, but inside the card we should limit the subtype selector?
-                        }
-                        return true;
+                        if (!searchQuery) return true;
+                        return beer.toLowerCase().includes(searchQuery.toLowerCase());
                     })
                     .map(beer => {
                         const isExpanded = expandedSections[beer];

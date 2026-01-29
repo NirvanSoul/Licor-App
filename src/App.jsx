@@ -19,7 +19,7 @@ import { OrderProvider } from './context/OrderContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { NotificationProvider } from './context/NotificationContext';
-import { AnalyticsProvider } from './context/AnalyticsContext'; // NEW
+
 import NotificationToast from './components/NotificationToast';
 import AuthListener from './components/AuthListener';
 // import JoinRequestNotifier from './components/JoinRequestNotifier'; // REMOVED - interfering with request display
@@ -43,33 +43,31 @@ function App() {
           <ProductProvider>
             <OrderProvider>
               <BrowserRouter>
-                <AnalyticsProvider>
-                  <ScrollToTop />
-                  <NotificationToast />
-                  {/* <JoinRequestNotifier /> */}  {/* REMOVED */}
+                <ScrollToTop />
+                <NotificationToast />
+                {/* <JoinRequestNotifier /> */}  {/* REMOVED */}
 
-                  <Routes>
-                    {/* Public Routes */}
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/register" element={<Register />} />
-                    <Route path="/forgot-password" element={<ForgotPassword />} />
-                    <Route path="/reset-password" element={<ResetPassword />} />
-                    <Route path="/complete-registration" element={<CompleteRegistration />} />
-                    <Route path="/activar/:token" element={<ActivateLicense />} />
+                <Routes>
+                  {/* Public Routes */}
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/register" element={<Register />} />
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
+                  <Route path="/complete-registration" element={<CompleteRegistration />} />
+                  <Route path="/activar/:token" element={<ActivateLicense />} />
 
-                    {/* Protected Routes */}
-                    <Route element={<PrivateRoute />}>
-                      <Route path="/" element={<MainLayout />}>
-                        <Route index element={<Navigate to="/vender" replace />} />
-                        <Route path="vender" element={<SalesPage />} />
-                        <Route path="caja" element={<CashPage />} />
-                        <Route path="pendientes" element={<PendingPage />} />
-                        <Route path="ajustes" element={<SettingsPage />} />
-                        <Route path="developer" element={<DeveloperPage />} /> {/* NEW */}
-                      </Route>
+                  {/* Protected Routes */}
+                  <Route element={<PrivateRoute />}>
+                    <Route path="/" element={<MainLayout />}>
+                      <Route index element={<Navigate to="/vender" replace />} />
+                      <Route path="vender" element={<SalesPage />} />
+                      <Route path="caja" element={<CashPage />} />
+                      <Route path="pendientes" element={<PendingPage />} />
+                      <Route path="ajustes" element={<SettingsPage />} />
+                      <Route path="developer" element={<DeveloperPage />} /> {/* NEW */}
                     </Route>
-                  </Routes>
-                </AnalyticsProvider>
+                  </Route>
+                </Routes>
               </BrowserRouter>
             </OrderProvider>
           </ProductProvider>

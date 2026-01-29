@@ -22,10 +22,10 @@ export default function SummaryCards({
                 >
                     <div className="label">Ventas de Hoy</div>
                     <div className="value">
-                        {currencySymbol}{(todayStats?.totalSales || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                        {currencySymbol}{(todayStats?.totalSales || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                     <div className="sub-value">
-                        Bs {(totalSalesBs || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        Bs {(totalSalesBs || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                     <div style={{ marginTop: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.95rem', fontWeight: 600 }}>
                         <Activity size={18} />
@@ -55,7 +55,7 @@ export default function SummaryCards({
                     <div style={{ fontSize: '0.9rem', fontWeight: 500, color: '#059669', marginBottom: '0.5rem' }}>Ganancia Neta</div>
 
                     <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#10b981', marginBottom: '0.5rem', letterSpacing: '-1px' }}>
-                        {currencySymbol}{(profitStats?.weekNet || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                        {currencySymbol}{(profitStats?.weekNet || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
 
                     <div style={{
@@ -68,12 +68,12 @@ export default function SummaryCards({
                         fontWeight: 600,
                         marginBottom: '1rem'
                     }}>
-                        Bs {((profitStats?.weekNet || 0) * rate).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        Bs {((profitStats?.weekNet || 0) * rate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
 
                     <div style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <Activity size={18} color="#10b981" />
-                        <span>Margen Semanal: {(profitStats?.weekMargin || 0).toFixed(1)}%</span>
+                        <span>Margen Semanal: {(profitStats?.weekMargin || 0).toFixed(2)}%</span>
                     </div>
                 </div>
             </div>

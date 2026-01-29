@@ -44,6 +44,7 @@ export const ProductProvider = ({ children }) => {
     const [breakageHistory, setBreakageHistory] = useState([]);
     const [pendingInventory, setPendingInventory] = useState({});
     const [pendingWaste, setPendingWaste] = useState({});
+    const [loading, setLoading] = useState(true);
 
     const getCurrencySymbol = (mode) => {
         if (mode === 'USD') return '$';
@@ -56,121 +57,132 @@ export const ProductProvider = ({ children }) => {
 
     // --- MOCK DATA SYNC ---
     useEffect(() => {
-        if (!organizationId) return;
+        if (!organizationId) {
+            setLoading(false);
+            return;
+        }
 
         const fetchInitialData = async () => {
+            // SILENT UPDATE: Only show loading if we have NO data yet (e.g. no beer types loaded)
+            const isInitialLoad = beerTypes.length === 0;
+            if (isInitialLoad) setLoading(true);
+
             try {
-                // 1. Products (Fetch Name, Color, ID)
-                const { data: products } = await fetchProducts(organizationId);
+                // 1. Fetch ALL data in parallel (Atomic & Fast)
+                const [
+                    productsRes,
+                    settingsRes,
+                    emissionsRes,
+                    inventoryRes,
+                    pricesRes,
+                    costsRes,
+                    invHistoryRes,
+                    wasteHistoryRes
+                ] = await Promise.all([
+                    fetchProducts(organizationId),
+                    fetchSettings(organizationId),
+                    fetchEmissions(organizationId),
+                    fetchInventory(organizationId),
+                    fetchPrices(organizationId),
+                    fetchCostPrices(organizationId),
+                    fetchInventoryHistory(organizationId),
+                    fetchWasteReports(organizationId)
+                ]);
 
-                const currentProductMap = {}; // Name -> ID
-                const currentIdMap = {};      // ID -> Name
-
-                if (products) {
-                    setBeerTypes(products.map(p => p.name));
-                    const colors = {};
-                    const cats = {};
-                    products.forEach(p => {
-                        if (p.color) colors[p.name] = p.color;
-                        cats[p.name] = p.category;
-                        currentProductMap[p.name] = p.id;
-                        currentIdMap[p.id] = p.name;
-                    });
-                    setBeerColors(colors);
-                    setBeerCategories(cats);
-                    setProductMap(currentProductMap);
+                // Validate critical data (Products) - if this fails, we don't proceed with partial updates
+                if (productsRes.error || !productsRes.data) {
+                    console.error("❌ [ProductContext] Failed to fetch products, skipping sync.");
+                    return;
                 }
 
-                // 2. Settings (Currency, Subtypes, Exchange Rates)
-                const { data: settings } = await fetchSettings(organizationId);
-                if (settings) {
-                    const mainCurrencySetting = settings.find(s => s.key === 'mainCurrency');
-                    if (mainCurrencySetting) setMainCurrency(mainCurrencySetting.value);
+                // 2. Build local maps
+                const products = productsRes.data;
+                const localIdMap = {};
+                const localProdMap = {};
+                const localColors = {};
+                const localCats = {};
+                const localBeerTypes = products.map(p => {
+                    const name = (p.name || '').trim();
+                    localIdMap[p.id] = name;
+                    localProdMap[name] = p.id;
+                    if (p.color) localColors[name] = p.color;
+                    localCats[name] = p.category;
+                    return name;
+                });
 
-                    const exchangeRatesSetting = settings.find(s => s.key === 'exchangeRates');
-                    if (exchangeRatesSetting) {
-                        setExchangeRates(exchangeRatesSetting.value);
-                    } else {
-                        // Trigger initial fetch if none in DB
-                        fetchRates();
+                // 3. Process Inventory, Prices, Costs using localIdMap
+                const localInvMap = {};
+                (inventoryRes.data || []).forEach(item => {
+                    const name = localIdMap[item.product_id];
+                    if (name) localInvMap[`${name}_${(item.subtype || '').trim()}`] = item.quantity;
+                });
+
+                const localPriceMap = {};
+                (pricesRes.data || []).forEach(p => {
+                    const name = localIdMap[p.product_id];
+                    if (name) {
+                        const suffix = p.is_local ? '_local' : '';
+                        const emission = (p.p_emission || p.emission || '').trim();
+                        const subtype = (p.subtype || '').trim();
+                        localPriceMap[`${name}_${emission}_${subtype}${suffix}`] = Number(p.price);
                     }
+                });
 
-                    const subtypesSetting = settings.find(s => s.key === 'subtypes');
-                    if (subtypesSetting) setSubtypes(subtypesSetting.value);
-                    else setSubtypes(['Botella', 'Botella Tercio', 'Lata Pequeña', 'Lata Grande']);
-                } else {
-                    fetchRates(); // Initial fetch
+                const localCostMap = {};
+                (costsRes.data || []).forEach(c => {
+                    const name = localIdMap[c.product_id];
+                    if (name) {
+                        const emission = (c.emission || '').trim();
+                        const subtype = (c.subtype || '').trim();
+                        localCostMap[`${name}_${emission}_${subtype}`] = Number(c.cost);
+                    }
+                });
+
+                // 4. Settings & Conversions
+                const settings = settingsRes.data || [];
+                const emissions = emissionsRes.data || [];
+                const localConvMap = {};
+                emissions.forEach(e => {
+                    if (e.name && e.subtype && e.units) {
+                        localConvMap[`${e.name.trim()}_${e.subtype.trim()}`] = e.units;
+                    }
+                });
+
+                // 5. ATOMIC STATE UPDATE
+                // We update all at once to ensure consistency
+                setBeerTypes(localBeerTypes);
+                setBeerColors(localColors);
+                setBeerCategories(localCats);
+                setProductMap(localProdMap);
+                setInventory(localInvMap);
+                setPrices(localPriceMap);
+                setCostPrices(localCostMap);
+                setConversions(localConvMap);
+                setRawEmissions(emissions);
+
+                if (emissions.length > 0) {
+                    const opts = ['Unidad', ...emissions.map(e => e.name.trim()).filter(n => n !== 'Unidad')];
+                    setEmissionOptions(Array.from(new Set(opts)));
                 }
 
-                // 3. Emisiones
-                const { data: emissionsData } = await fetchEmissions(organizationId);
-                let emissionNames = ['Unidad', 'Caja'];
-                if (emissionsData && emissionsData.length > 0) {
-                    setRawEmissions(emissionsData);
-                    emissionNames = ['Unidad', ...emissionsData.map(e => e.name).filter(n => n !== 'Unidad')];
+                if (settings.length > 0) {
+                    const cur = settings.find(s => s.key === 'mainCurrency');
+                    if (cur) setMainCurrency(cur.value);
+                    const rates = settings.find(s => s.key === 'exchangeRates');
+                    if (rates) setExchangeRates(rates.value);
+                    const sub = settings.find(s => s.key === 'subtypes');
+                    if (sub) setSubtypes(sub.value);
                 }
-                setEmissionOptions(emissionNames);
 
-                // 4. Inventory
-                const { data: dbInv } = await fetchInventory(organizationId);
-                const invMap = {};
-                if (Array.isArray(dbInv)) {
-                    dbInv.forEach(item => {
-                        const productName = currentIdMap[item.product_id];
-                        if (productName) {
-                            invMap[`${productName}_${item.subtype}`] = item.quantity;
-                        }
-                    });
-                }
-                setInventory(invMap);
+                if (invHistoryRes.data) setInventoryHistory(invHistoryRes.data.slice(0, 50));
+                if (wasteHistoryRes.data) setBreakageHistory(wasteHistoryRes.data.slice(0, 50));
 
-                // 5. Prices
-                const { data: dbPrices } = await fetchPrices(organizationId);
-                const priceMap = {};
-                if (Array.isArray(dbPrices)) {
-                    dbPrices.forEach(p => {
-                        const productName = currentIdMap[p.product_id];
-                        if (productName) {
-                            const suffix = p.is_local ? '_local' : '';
-                            priceMap[`${productName}_${p.p_emission || p.emission}_${p.subtype}${suffix}`] = Number(p.price);
-                        }
-                    });
-                }
-                setPrices(priceMap);
-
-                // 6. Cost Prices
-                const { data: dbCosts } = await fetchCostPrices(organizationId);
-                const costMap = {};
-                if (Array.isArray(dbCosts)) {
-                    dbCosts.forEach(c => {
-                        const productName = currentIdMap[c.product_id];
-                        if (productName) {
-                            costMap[`${productName}_${c.emission}_${c.subtype}`] = Number(c.cost);
-                        }
-                    });
-                }
-                setCostPrices(costMap);
-
-                // 7. Conversions
-                const convMap = {};
-                if (emissionsData && Array.isArray(emissionsData)) {
-                    emissionsData.forEach(e => {
-                        if (e.name && e.subtype && e.units) {
-                            convMap[`${e.name}_${e.subtype}`] = e.units;
-                        }
-                    });
-                }
-                setConversions(convMap);
-
-                // 8. History (Inventory & Waste)
-                const { data: invHist } = await fetchInventoryHistory(organizationId);
-                if (invHist) setInventoryHistory(invHist.slice(0, 50));
-
-                const { data: wasteHist } = await fetchWasteReports(organizationId);
-                if (wasteHist) setBreakageHistory(wasteHist.slice(0, 50));
+                console.log("✅ [ProductContext] Atomic sync complete.");
 
             } catch (error) {
-                console.error("Error fetching initial data:", error);
+                console.error("❌ [ProductContext] Fatal error during sync:", error);
+            } finally {
+                setLoading(false);
             }
         };
 
@@ -1112,6 +1124,7 @@ export const ProductProvider = ({ children }) => {
             pendingPrices, updatePendingPrice, getPendingPrice, hasPendingPrice,
             pendingCostPrices, updatePendingCostPrice, getPendingCostPrice, hasPendingCostPrice,
             commitPriceChanges, clearPendingPrices,
+            productLoading: loading,
             resetApp: async () => { await resetDatabase(); window.location.reload(); }
         }}>
             {children}

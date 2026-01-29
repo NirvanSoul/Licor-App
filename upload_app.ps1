@@ -18,6 +18,6 @@ git add .
 git commit -m "$mensaje"
 
 Write-Host "⬆️  Subiendo a la nube..."
-git push origin main
+git push origin master
 
 Write-Host "✅ ¡Listo! Tus cambios estan seguros en GitHub."

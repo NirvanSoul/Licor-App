@@ -15,7 +15,15 @@ const RatesSection = () => {
     return (
         <div className="order-summary-card">
             <h3 className="modal-title" style={{ fontSize: '1.1rem', textAlign: 'left', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                Tasas del Día:
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ lineHeight: '1.2' }}>Tasas del Día:</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '1rem', color: 'var(--text-secondary)', fontWeight: 400, marginTop: '4px' }}>
+                        consultadas en:
+                        <a href="https://kuanto.online" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', opacity: 0.8 }} title="Ir a Kuanto.online">
+                            <img src="Logo Kuanto.svg" alt="Logo" style={{ height: '18px' }} />
+                        </a>
+                    </div>
+                </div>
                 <button
                     onClick={() => setHistoryModalOpen(true)}
                     style={{
@@ -38,7 +46,7 @@ const RatesSection = () => {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem', padding: '1rem 0' }}>
                 <div style={{ background: 'var(--bg-card-hover)', padding: '1rem', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '0.25rem' }}>Tasa BCV (USD)</span>
-                    <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: '#34c759' }}>
+                    <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: '#10B981' }}>
                         {exchangeRates.bcv ? `${Number(exchangeRates.bcv).toLocaleString('en-US')} Bs` : '--.-- Bs'}
                     </div>
                     {exchangeRates.nextRates && (
@@ -118,7 +126,7 @@ const RatesSection = () => {
                                 }
                             }}
                             style={{
-                                background: isEditingCustomRate ? '#34c759' : 'rgba(128, 128, 128, 0.1)',
+                                background: isEditingCustomRate ? '#10B981' : 'rgba(128, 128, 128, 0.1)',
                                 border: 'none',
                                 borderRadius: '50%',
                                 width: '36px',
@@ -161,7 +169,7 @@ const RatesSection = () => {
                             style={{
                                 padding: '8px 12px',
                                 borderRadius: '12px',
-                                background: mainCurrency === 'USD' ? '#34c759' : 'transparent',
+                                background: mainCurrency === 'USD' ? '#10B981' : 'transparent',
                                 color: mainCurrency === 'USD' ? 'white' : 'var(--text-secondary)',
                                 border: mainCurrency === 'USD' ? 'none' : '1px solid var(--accent-light)',
                                 cursor: 'pointer',
@@ -248,7 +256,7 @@ const RatesSection = () => {
                                         exchangeRates.history.map((rate, i) => (
                                             <tr key={i} style={{ borderBottom: '1px solid var(--bg-card-hover)' }}>
                                                 <td style={{ padding: '0.75rem', textAlign: 'left', fontWeight: 500 }}>{rate.date}</td>
-                                                <td style={{ padding: '0.75rem', color: '#34c759', fontWeight: 600 }}>{rate.usd}</td>
+                                                <td style={{ padding: '0.75rem', color: '#10B981', fontWeight: 600 }}>{rate.usd}</td>
                                                 <td style={{ padding: '0.75rem', color: '#3b82f6', fontWeight: 600 }}>{rate.eur}</td>
                                             </tr>
                                         ))

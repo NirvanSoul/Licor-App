@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 // import { supabase } from '../supabaseClient';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogIn, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { LogIn, Eye, EyeOff, ArrowLeft, ArrowRight, Mail, Lock } from 'lucide-react';
 import './SalesPage.css';
+import './Login.css';
 
 import StoreIcon from '../assets/Store Icon.svg';
 import EmployeeIcon from '../assets/Employe Icon.svg';
@@ -55,127 +56,70 @@ export default function Login() {
         }
     };
 
-    // --- VIEW: ROLE SELECTION MODAL ---
+    // --- VIEW: ROLE SELECTION ---
     if (viewMode === 'selection') {
         return (
             <div style={{
                 display: 'flex', flexDirection: 'column',
                 alignItems: 'center', justifyContent: 'center',
-                height: '100vh', background: 'var(--bg-app)', padding: '1rem',
-                transition: 'background var(--transition-smooth)'
+                height: '100vh', background: '#09090b', // Deep dark bg
+                padding: '1.5rem',
+                fontFamily: 'Inter, sans-serif'
             }}>
                 <div style={{
-                    background: 'var(--bg-card)', padding: '3rem 2rem', borderRadius: '32px',
-                    width: '100%', maxWidth: '480px',
-                    boxShadow: 'var(--shadow-xl)',
-                    border: '1px solid var(--accent-light)',
-                    textAlign: 'center'
+                    width: '100%', maxWidth: '420px',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center'
                 }}>
-                    <div style={{
-                        marginTop: '0.5rem', marginBottom: '2rem',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center'
-                    }}>
-                        <img src="/KavasAppLogo.svg" alt="App Logo" style={{ width: '80px', height: '80px', borderRadius: '20px' }} />
+                    {/* App Logo & Welcome */}
+                    <div style={{ marginBottom: '2.5rem', textAlign: 'center' }}>
+                        <div style={{
+                            width: '80px', height: '80px', borderRadius: '22px',
+                            background: 'linear-gradient(135deg, #F97316 0%, #EA580C 100%)',
+                            boxShadow: '0 20px 40px -10px rgba(249, 115, 22, 0.4)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            margin: '0 auto 1.5rem auto'
+                        }}>
+                            <img src="/KavasAppLogo.svg" alt="App Logo" style={{ width: '100%', height: '100%', borderRadius: '22px' }} />
+                        </div>
+                        <h2 style={{ fontSize: '2rem', fontWeight: 800, color: 'white', marginBottom: '0.5rem', letterSpacing: '-0.5px' }}>
+                            Bienvenido a Kavas
+                        </h2>
+                        <p style={{ color: '#a1a1aa', fontSize: '1rem', fontWeight: 400 }}>
+                            Selecciona tu perfil para continuar
+                        </p>
                     </div>
 
-                    <h2 style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
-                        Bienvenido a Kavas
-                    </h2>
-                    <p style={{ color: 'var(--text-secondary)', marginBottom: '2.5rem', lineHeight: '1.5' }}>
-                        Selecciona tu tipo de perfil para continuar
-                    </p>
-
-                    <div className="role-selection-grid">
-                        {/* CARD DUENO (App Orange Gradient) */}
+                    <div className="role-grid">
+                        {/* CARD DUENO */}
                         <button
                             onClick={() => handleRoleSelect('owner')}
-                            className="role-card"
-                            onMouseEnter={() => setHoveredCard('owner')}
-                            onMouseLeave={() => setHoveredCard(null)}
-                            style={{
-                                background: 'linear-gradient(135deg, #FA8E36 0%, #F97316 100%)', // Matches btn-primary-gradient
-                                border: 'none',
-                                transform: hoveredCard === 'owner' ? 'translateY(-6px)' : 'none',
-                                padding: '1.75rem 1rem', borderRadius: '28px', cursor: 'pointer',
-                                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem',
-                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                boxShadow: hoveredCard === 'owner' ? '0 20px 25px -5px rgba(234, 88, 12, 0.4)' : '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                                position: 'relative', overflow: 'hidden'
-                            }}
+                            className="role-btn owner-btn"
                         >
-                            {/* Decorative Glow */}
-                            <div style={{ position: 'absolute', top: '-20%', right: '-20%', width: '100px', height: '100px', background: 'rgba(255,255,255,0.15)', borderRadius: '50%', filter: 'blur(20px)' }}></div>
-
-                            <div style={{
-                                width: '68px', height: '68px', borderRadius: '50%',
-                                background: '#ffffff', // White Circle
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                            }}>
-                                {/* Gradient Icon via Mask */}
-                                <div style={{
-                                    width: '34px', height: '34px',
-                                    background: 'linear-gradient(135deg, #F97316 80%, #FA8E36 20%)', // Orange Gradient
-                                    maskImage: `url("${StoreIcon}")`,
-                                    WebkitMaskImage: `url("${StoreIcon}")`,
-                                    maskSize: 'contain',
-                                    WebkitMaskSize: 'contain',
-                                    maskRepeat: 'no-repeat',
-                                    WebkitMaskRepeat: 'no-repeat',
-                                    maskPosition: 'center',
-                                    WebkitMaskPosition: 'center'
-                                }} />
+                            <div className="btn-glow" />
+                            <div className="icon-box">
+                                <img src={StoreIcon} alt="Owner" />
                             </div>
-                            <div>
-                                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'white', marginBottom: '6px', letterSpacing: '0.5px' }}>Empleador</h3>
-                                <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.9)', lineHeight: '1.4', fontWeight: 500 }}>Dueño de negocio, gestiona inventario y finanzas.</p>
+                            <div className="text-content">
+                                <h3>Empleador</h3>
+                                <p>Gestión total del negocio</p>
                             </div>
+                            <ArrowRight className="arrow-icon" size={20} strokeWidth={3} />
                         </button>
 
-                        {/* CARD EMPLEADO (App Green Gradient) */}
+                        {/* CARD EMPLEADO */}
                         <button
                             onClick={() => handleRoleSelect('employee')}
-                            className="role-card"
-                            onMouseEnter={() => setHoveredCard('employee')}
-                            onMouseLeave={() => setHoveredCard(null)}
-                            style={{
-                                background: 'linear-gradient(135deg, #34D399 0%, #10B981 100%)', // Matches standard Emerald Success/Active green
-                                border: 'none',
-                                transform: hoveredCard === 'employee' ? 'translateY(-6px)' : 'none',
-                                padding: '1.75rem 1rem', borderRadius: '28px', cursor: 'pointer',
-                                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem',
-                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                boxShadow: hoveredCard === 'employee' ? '0 20px 25px -5px rgba(16, 185, 129, 0.4)' : '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                                position: 'relative', overflow: 'hidden'
-                            }}
+                            className="role-btn employee-btn"
                         >
-                            {/* Decorative Glow */}
-                            <div style={{ position: 'absolute', top: '-10%', left: '-10%', width: '80px', height: '80px', background: 'rgba(255,255,255,0.15)', borderRadius: '50%', filter: 'blur(20px)' }}></div>
-
-                            <div style={{
-                                width: '68px', height: '68px', borderRadius: '50%',
-                                background: '#ffffff', // White Circle
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                            }}>
-                                {/* Gradient Icon via Mask */}
-                                <div style={{
-                                    width: '34px', height: '34px',
-                                    background: 'linear-gradient(135deg, #10B981 100%, #34D399 0%)', // Green Gradient
-                                    maskImage: `url("${EmployeeIcon}")`,
-                                    WebkitMaskImage: `url("${EmployeeIcon}")`,
-                                    maskSize: 'contain',
-                                    WebkitMaskSize: 'contain',
-                                    maskRepeat: 'no-repeat',
-                                    WebkitMaskRepeat: 'no-repeat',
-                                    maskPosition: 'center',
-                                    WebkitMaskPosition: 'center'
-                                }} />
+                            <div className="btn-glow" />
+                            <div className="icon-box">
+                                <img src={EmployeeIcon} alt="Employee" />
                             </div>
-                            <div>
-                                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'white', marginBottom: '6px', letterSpacing: '0.5px' }}>Empleado</h3>
-                                <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.9)', lineHeight: '1.4', fontWeight: 500 }}>Vendedor, caja y atención al cliente.</p>
+                            <div className="text-content">
+                                <h3>Empleado</h3>
+                                <p>Ventas y caja</p>
                             </div>
+                            <ArrowRight className="arrow-icon" size={20} strokeWidth={3} />
                         </button>
                     </div>
                 </div>
@@ -188,50 +132,77 @@ export default function Login() {
         <div style={{
             display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center',
-            height: '100vh', background: 'var(--bg-app)', padding: '1rem',
-            transition: 'background var(--transition-smooth)'
+            height: '100vh', background: '#09090b', padding: '1.5rem',
+            fontFamily: 'Inter, sans-serif'
         }}>
             <div style={{
-                background: 'var(--bg-card)', padding: '2.5rem 2rem', borderRadius: '32px',
                 width: '100%', maxWidth: '400px',
-                boxShadow: 'var(--shadow-soft)',
-                border: '1px solid var(--accent-light)',
-                transition: 'all var(--transition-smooth)',
+                background: 'rgba(24, 24, 27, 0.8)',
+                padding: '2.5rem 2rem',
+                borderRadius: '32px',
+                border: '1px solid #27272a',
+                backdropFilter: 'blur(12px)',
                 position: 'relative'
             }}>
                 <button
                     onClick={() => setViewMode('selection')}
-                    className="back-btn"
+                    style={{
+                        position: 'absolute', top: '24px', left: '24px',
+                        background: '#27272a', border: '1px solid #3f3f46',
+                        color: '#a1a1aa', cursor: 'pointer',
+                        padding: '8px 16px', borderRadius: '12px',
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        fontWeight: 600, fontSize: '0.85rem',
+                        transition: 'all 0.2s'
+                    }}
+                    onMouseOver={(e) => {
+                        e.currentTarget.style.color = 'white';
+                        e.currentTarget.style.background = '#3f3f46';
+                    }}
+                    onMouseOut={(e) => {
+                        e.currentTarget.style.color = '#a1a1aa';
+                        e.currentTarget.style.background = '#27272a';
+                    }}
                 >
-                    <ArrowLeft size={18} />
+                    <ArrowLeft size={18} strokeWidth={2.5} />
                     Volver
                 </button>
 
                 <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
                     <div style={{
-                        width: '64px', height: '64px',
-                        display: 'flex', alignItems: 'center',
-                        justifyContent: 'center', margin: '0 auto 1.5rem auto'
+                        width: '64px', height: '64px', borderRadius: '18px',
+                        background: selectedRole === 'owner'
+                            ? 'linear-gradient(135deg, #FA8E36 0%, #F97316 100%)'
+                            : 'linear-gradient(135deg, #34D399 0%, #10B981 100%)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        margin: '0 auto 1.5rem auto',
+                        boxShadow: selectedRole === 'owner'
+                            ? '0 10px 20px -5px rgba(249, 115, 22, 0.4)'
+                            : '0 10px 20px -5px rgba(16, 185, 129, 0.4)'
                     }}>
-                        <img src="/KavasAppLogo.svg" alt="Kavas App Logo" style={{ width: '100%', height: '100%' }} />
+                        <img src={selectedRole === 'owner' ? StoreIcon : EmployeeIcon} alt="Icon" style={{ width: '32px', height: '32px', filter: 'brightness(0) invert(1)' }} />
                     </div>
-                    <h2 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
-                        {selectedRole === 'owner' ? 'Acceso Dueños' : 'Acceso Empleados'}
+                    <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'white', margin: 0 }}>
+                        {selectedRole === 'owner' ? 'Login Empleador' : 'Login Empleado'}
                     </h2>
-                    <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem', fontWeight: 500 }}>Ingresa tus credenciales</p>
+                    <p style={{ color: '#a1a1aa', marginTop: '0.5rem', fontSize: '0.95rem' }}>
+                        Ingresa tus credenciales para continuar
+                    </p>
                 </div>
 
                 {error && (
                     <div style={{
-                        background: '#FEE2E2', color: '#991B1B', padding: '0.75rem',
-                        borderRadius: '12px', marginBottom: '1rem', fontSize: '0.9rem', textAlign: 'center'
+                        background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '0.75rem',
+                        borderRadius: '12px', marginBottom: '1.5rem', fontSize: '0.9rem', textAlign: 'center',
+                        border: '1px solid rgba(239, 68, 68, 0.2)'
                     }}>
                         {error}
                     </div>
                 )}
 
-                <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    <div className="input-group-large">
+                <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    <div className="input-group-large" style={{ position: 'relative' }}>
+                        <Mail size={20} color="#52525b" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', zIndex: 1 }} />
                         <input
                             type="email"
                             placeholder="Email"
@@ -239,10 +210,11 @@ export default function Login() {
                             onChange={(e) => setEmail(e.target.value)}
                             required
                             className="ticket-input-large"
-                            style={{ width: '100%', boxSizing: 'border-box' }}
+                            style={{ width: '100%', boxSizing: 'border-box', paddingLeft: '48px', background: '#09090b', border: '1px solid #27272a', color: 'white' }}
                         />
                     </div>
-                    <div style={{ position: 'relative', width: '100%' }}>
+                    <div className="input-group-large" style={{ position: 'relative' }}>
+                        <Lock size={20} color="#52525b" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', zIndex: 1 }} />
                         <input
                             type={showPassword ? 'text' : 'password'}
                             placeholder="Contraseña"
@@ -250,147 +222,62 @@ export default function Login() {
                             onChange={(e) => setPassword(e.target.value)}
                             required
                             className="ticket-input-large"
-                            style={{ width: '100%', boxSizing: 'border-box', paddingRight: '48px' }}
+                            style={{ width: '100%', boxSizing: 'border-box', paddingLeft: '48px', paddingRight: '48px', background: '#09090b', border: '1px solid #27272a', color: 'white' }}
                         />
                         <button
                             type="button"
                             onClick={() => setShowPassword(!showPassword)}
                             style={{
-                                position: 'absolute',
-                                right: '14px',
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                color: 'var(--text-secondary)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                padding: '4px'
+                                position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)',
+                                background: 'none', border: 'none', cursor: 'pointer', color: '#52525b',
+                                display: 'flex', alignItems: 'center', padding: '4px', zIndex: 1
                             }}
                         >
                             {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                         </button>
                     </div>
 
+                    <div style={{ textAlign: 'center' }}>
+                        <Link to="/forgot-password" style={{ color: '#a1a1aa', fontSize: '0.85rem', textDecoration: 'none', fontWeight: 500 }}>
+                            ¿Olvidaste tu contraseña?
+                        </Link>
+                    </div>
+
                     <button
                         type="submit"
                         disabled={loading}
                         className="btn-primary-gradient"
-                        style={{ marginTop: '1rem' }}
+                        style={{
+                            marginTop: '0.5rem',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                            background: selectedRole === 'owner'
+                                ? 'linear-gradient(135deg, #FA8E36 0%, #F97316 100%)'
+                                : 'linear-gradient(135deg, #34D399 0%, #10B981 100%)',
+                            boxShadow: selectedRole === 'owner'
+                                ? '0 10px 20px -5px rgba(249, 115, 22, 0.4)'
+                                : '0 10px 20px -5px rgba(16, 185, 129, 0.4)'
+                        }}
                     >
-                        {loading ? 'Entrando...' : 'Ingresar'}
+                        {loading ? 'Iniciando...' : (
+                            <>
+                                <LogIn size={20} strokeWidth={2.5} />
+                                Iniciar Sesión
+                            </>
+                        )}
                     </button>
                 </form>
 
-                <div style={{ marginTop: '2rem', textAlign: 'center', fontSize: '0.95rem', color: 'var(--text-secondary)' }}>
-                    ¿No tienes cuenta?{' '}
+                <div style={{ marginTop: '2rem', textAlign: 'center', fontSize: '0.9rem', color: '#a1a1aa' }}>
+                    ¿No tienes una cuenta?{' '}
                     <Link
-                        to={selectedRole === 'employee' ? '/register?mode=employee' : '/register'}
-                        style={{ color: 'var(--accent-color)', fontWeight: 700, textDecoration: 'none' }}
+                        to={selectedRole === 'owner' ? "/register" : "/register?mode=employee"}
+                        style={{ color: selectedRole === 'owner' ? '#f97316' : '#10b981', fontWeight: 700, textDecoration: 'none' }}
                     >
-                        {selectedRole === 'employee' ? 'Solicitar Acceso' : 'Registrar Negocio'}
-                    </Link>
-                </div>
-                <div style={{ marginTop: '1rem', textAlign: 'center' }}>
-                    <Link to="/forgot-password" style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', textDecoration: 'none', opacity: 0.8 }}>
-                        ¿Olvidaste tu contraseña?
+                        Regístrate
                     </Link>
                 </div>
             </div>
-
-            <style jsx>{`
-                /* Grid Layout for Roles */
-                .role-selection-grid {
-                    display: grid;
-                    grid-template-columns: 1fr 1fr;
-                    gap: 1rem;
-                    width: 100%;
-                }
-
-                /* Default Card Styles (Desktop) - Inherits inline styles but adding overrides if needed */
-                .role-card {
-                    /* Default is vertical column as per inline styles */
-                }
-
-                /* Mobile Adjustments */
-                @media (max-width: 600px) {
-                    .role-selection-grid {
-                        grid-template-columns: 1fr; /* Stack vertically */
-                        gap: 0.75rem; /* Slightly tighter gap */
-                    }
-                    
-                    .role-card {
-                        flex-direction: row !important; /* Horizontal internal layout */
-                        align-items: center !important;
-                        text-align: left !important;
-                        padding: 1rem 1.25rem !important; /* Reduced padding */
-                        gap: 1rem !important;
-                        min-height: 80px; /* Reduced height */
-                        border-radius: 20px !important; /* Slightly reduced radius for better proportion */
-                    }
-
-                    .role-card > div:first-child {
-                        /* Icon Container */
-                        width: 42px !important; /* Smaller icon container */
-                        height: 42px !important;
-                        flex-shrink: 0;
-                        border-radius: 12px !important; /* Softer square or circle */
-                    }
-
-                    .role-card > div:first-child > div {
-                        /* Icon Mask */
-                        width: 20px !important;
-                        height: 20px !important;
-                    }
-
-                    .role-card > div:last-child {
-                        /* Text Container */
-                        display: flex;
-                        flex-direction: column;
-                        align-items: flex-start;
-                        justify-content: center;
-                    }
-                    
-                    .role-card h3 {
-                        margin-bottom: 2px !important;
-                        font-size: 1rem !important; /* Slightly smaller text */
-                    }
-                    
-                    .role-card p {
-                        font-size: 0.75rem !important;
-                        line-height: 1.3 !important;
-                        margin: 0;
-                        opacity: 0.9;
-                    }
-                }
-
-                /* Volver Button - Light Mode Compatibility */
-                .back-btn {
-                    position: absolute;
-                    top: 24px;
-                    left: 24px;
-                    background: rgba(128, 128, 128, 0.1); /* Visible on both dark and light */
-                    border: 1px solid rgba(128, 128, 128, 0.2);
-                    color: var(--text-primary);
-                    cursor: pointer;
-                    padding: 8px 16px;
-                    border-radius: 12px;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    font-weight: 600;
-                    font-size: 0.9rem;
-                    transition: all 0.2s;
-                    box-shadow: none;
-                }
-
-                .back-btn:hover {
-                    background: rgba(128, 128, 128, 0.2);
-                    transform: translateY(-1px);
-                    color: var(--text-primary);
-                }
-            `}</style>
         </div>
     );
 }
+

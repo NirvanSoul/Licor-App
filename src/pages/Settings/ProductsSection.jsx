@@ -9,7 +9,7 @@ import { presetColors } from '../../data/settingsData';
 // Assuming we want to keep it self-contained or use the one in components/
 import AccordionSection from '../../components/AccordionSection';
 
-const ProductsSection = () => {
+const ProductsSection = ({ onGuide }) => {
     const {
         beerTypes, addBeerType, removeBeerType,
         prices, getEmissionsForSubtype, addEmissionType, removeEmissionType,
@@ -21,6 +21,7 @@ const ProductsSection = () => {
     const [newBeerName, setNewBeerName] = useState('');
     const [newBeerColor, setNewBeerColor] = useState('#FFBC00');
     const [newBeerSubtype, setNewBeerSubtype] = useState('Botella'); // 'Botella' | 'Lata'
+    const [lataSize, setLataSize] = useState('Lata Pequeña'); // 'Lata Pequeña' | 'Lata Grande'
     const [showColorPicker, setShowColorPicker] = useState(false);
     const [pickerPos, setPickerPos] = useState({ top: 0, left: 0 });
 
@@ -34,16 +35,29 @@ const ProductsSection = () => {
 
     const handleAddBeer = async () => {
         if (!newBeerName.trim()) return;
-        await addBeerType(newBeerName, newBeerColor, newBeerSubtype);
+        const nameToAdd = newBeerName.trim();
+        const finalCategory = newBeerSubtype === 'Lata' ? lataSize : 'Botella';
+        await addBeerType(nameToAdd, newBeerColor, finalCategory);
         setNewBeerName('');
         setNewBeerColor('#FFBC00'); // Reset to default gold
+
+        // Trigger Guidance
+        if (onGuide) {
+            onGuide('price', nameToAdd, `¡${nameToAdd} agregado! ¿Quieres configurar sus precios ahora?`);
+        }
     };
 
     const handleAddEmission = async () => {
         if (!newEmissionName.trim()) return;
+        const nameToAdd = newEmissionName.trim();
         // Default to 1 unit when creating - user will adjust with +/- buttons
-        await addEmissionType(newEmissionName, 1, selectedConversionSubtype);
+        await addEmissionType(nameToAdd, 1, selectedConversionSubtype);
         setNewEmissionName('');
+
+        // Trigger Guidance
+        if (onGuide) {
+            onGuide('price', nameToAdd, `¡Emisión "${nameToAdd}" agregada! ¿Quieres configurar los precios para este formato ahora?`);
+        }
     };
 
 
@@ -75,8 +89,10 @@ const ProductsSection = () => {
                             />
                         </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-                            <div style={{ minWidth: '140px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {/* Selector Group */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                {/* Primary Toggle: Botella / Lata */}
                                 <div style={{
                                     position: 'relative',
                                     display: 'flex',
@@ -84,6 +100,7 @@ const ProductsSection = () => {
                                     borderRadius: '999px',
                                     padding: '2px',
                                     height: '36px',
+                                    width: '180px',
                                     isolation: 'isolate'
                                 }}>
                                     <div style={{
@@ -109,23 +126,70 @@ const ProductsSection = () => {
                                         Lata
                                     </button>
                                 </div>
+
+                                {/* Secondary Toggle: Tamaño (Only if Lata) */}
+                                {newBeerSubtype === 'Lata' && (
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        animation: 'fadeIn 0.3s ease'
+                                    }}>
+                                        <div style={{
+                                            position: 'relative',
+                                            display: 'flex',
+                                            background: 'var(--bg-app)',
+                                            borderRadius: '999px',
+                                            padding: '2px',
+                                            height: '32px',
+                                            width: '180px',
+                                            isolation: 'isolate'
+                                        }}>
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: '2px', bottom: '2px', left: '2px',
+                                                width: 'calc(50% - 2px)',
+                                                background: 'var(--text-primary)',
+                                                borderRadius: '999px',
+                                                transform: lataSize === 'Lata Grande' ? 'translateX(100%)' : 'translateX(0)',
+                                                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                zIndex: 1
+                                            }} />
+                                            <button
+                                                onClick={() => setLataSize('Lata Pequeña')}
+                                                style={{ flex: 1, border: 'none', background: 'transparent', color: lataSize === 'Lata Pequeña' ? 'var(--bg-card)' : 'var(--text-secondary)', fontWeight: 700, fontSize: '0.75rem', zIndex: 2, cursor: 'pointer' }}
+                                            >
+                                                Pequeña
+                                            </button>
+                                            <button
+                                                onClick={() => setLataSize('Lata Grande')}
+                                                style={{ flex: 1, border: 'none', background: 'transparent', color: lataSize === 'Lata Grande' ? 'var(--bg-card)' : 'var(--text-secondary)', fontWeight: 700, fontSize: '0.75rem', zIndex: 2, cursor: 'pointer' }}
+                                            >
+                                                Grande
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
+                            {/* Final Action Button */}
                             <button
                                 onClick={handleAddBeer}
                                 className="option-btn selected"
                                 style={{
-                                    padding: '0 1.5rem',
-                                    height: '40px',
-                                    borderRadius: '12px',
+                                    width: '100%',
+                                    height: '46px',
+                                    borderRadius: '16px',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '8px',
-                                    fontSize: '0.9rem'
+                                    justifyContent: 'center',
+                                    gap: '10px',
+                                    fontSize: '1rem',
+                                    marginTop: '0.25rem',
+                                    boxShadow: '0 4px 15px rgba(255, 188, 0, 0.2)'
                                 }}
                             >
-                                <Plus size={18} />
-                                <span>Agregar</span>
+                                <Plus size={20} />
+                                <span>Agregar Producto</span>
                             </button>
                         </div>
                     </div>

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Pencil } from 'lucide-react';
 import { useProduct } from '../../context/ProductContext';
 import { useAuth } from '../../context/AuthContext';
@@ -9,13 +9,18 @@ import BeerPriceEditor from './components/BeerPriceEditor';
 import PriceFab from '../../components/PriceFab';
 import { getGlobalSearchScore } from '../../utils/searchUtils';
 
-const PriceSection = () => {
+const PriceSection = ({ initialEditMode, initialSearch }) => {
     const { beerTypes } = useProduct();
     const { role } = useAuth();
     const { theme } = useTheme();
 
-    const [searchQuery, setSearchQuery] = useState('');
-    const [isEditMode, setIsEditMode] = useState(false);
+    const [searchQuery, setSearchQuery] = useState(initialSearch || '');
+    const [isEditMode, setIsEditMode] = useState(initialEditMode || false);
+
+    useEffect(() => {
+        if (initialEditMode) setIsEditMode(true);
+        if (initialSearch) setSearchQuery(initialSearch);
+    }, [initialEditMode, initialSearch]);
 
     // Employees can only view, not edit
     const canEdit = role && ['OWNER', 'MANAGER', 'DEVELOPER'].includes(role);

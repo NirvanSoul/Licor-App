@@ -50,7 +50,7 @@ export default function WeeklyAnalysisModal({
                         <div className="dashboard-card" style={{ background: 'linear-gradient(135deg, #fb923c 0%, #f97316 100%)', color: 'white', border: 'none', padding: '1rem' }}>
                             <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>Total Ventas</div>
                             <div style={{ fontSize: '1.4rem', fontWeight: 800 }}>
-                                {currencySymbol}{selectedWeek.total.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                {currencySymbol}{selectedWeek.total.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </div>
                             <div style={{ fontSize: '0.75rem', opacity: 0.9, fontWeight: 600 }}>
                                 Bs {(selectedWeek.total * rate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -62,7 +62,7 @@ export default function WeeklyAnalysisModal({
                         <div className="dashboard-card" style={{ background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.05)', padding: '1rem' }}>
                             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Máximo Diario</div>
                             <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#4ade80' }}>
-                                {currencySymbol}{selectedWeek.max.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                {currencySymbol}{selectedWeek.max.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </div>
                             <div style={{ fontSize: '0.75rem', color: '#4ade80', fontWeight: 600, opacity: 0.9 }}>
                                 Bs {(selectedWeek.max * rate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -112,7 +112,7 @@ export default function WeeklyAnalysisModal({
                                                     color: isPeak ? '#fb923c' : 'var(--text-secondary)',
                                                     whiteSpace: 'nowrap'
                                                 }}>
-                                                    {val > 999 ? `${(val / 1000).toFixed(1)}k` : val.toFixed(0)}
+                                                    {val > 999 ? `${(val / 1000).toFixed(1)}k` : val.toFixed(2)}
                                                 </div>
                                             )}
                                         </div>

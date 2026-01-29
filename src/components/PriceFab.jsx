@@ -5,6 +5,7 @@ import { Save, CheckCircle, DollarSign } from 'lucide-react';
 export default function PriceFab() {
     const {
         pendingPrices,
+        pendingCostPrices,
         commitPriceChanges,
         clearPendingPrices,
         currencySymbol
@@ -15,7 +16,7 @@ export default function PriceFab() {
     const [lastReport, setLastReport] = useState(null);
 
     // Count total changes
-    const totalChanges = Object.keys(pendingPrices || {}).length;
+    const totalChanges = Object.keys(pendingPrices || {}).length + Object.keys(pendingCostPrices || {}).length;
 
     if (totalChanges === 0 && !showSummary && !showConfirm) return null;
 
@@ -28,6 +29,9 @@ export default function PriceFab() {
         setLastReport(report);
         setShowConfirm(false);
         setShowSummary(true);
+
+        // Dispatch event for guidance system
+        window.dispatchEvent(new CustomEvent('price-saved-guide'));
     };
 
     const handleCancel = () => {
@@ -117,7 +121,7 @@ export default function PriceFab() {
                             ¿Guardar Precios?
                         </h3>
                         <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-                            Vas a actualizar {totalChanges} precio{totalChanges !== 1 ? 's' : ''}. Los cambios serán visibles para todos los usuarios inmediatamente.
+                            Vas a actualizar {totalChanges} parámetro{totalChanges !== 1 ? 's' : ''} (precios y/o costos). Los cambios serán visibles para todos los usuarios inmediatamente.
                         </p>
                         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
                             <button

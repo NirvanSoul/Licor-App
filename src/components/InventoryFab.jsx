@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useProduct } from '../context/ProductContext';
 import { Package, CheckCircle, Trash2 } from 'lucide-react';
 
 export default function InventoryFab() {
+    const location = useLocation();
     const {
         pendingInventory, commitInventory, clearPendingInventory, getUnitsPerEmission,
         pendingWaste = {}, commitWaste = async () => ({}), clearPendingWaste = () => { },
-        getCostPrice, updateCostPrice
+        getCostPrice, updateCostPrice,
+        pendingPrices, pendingCostPrices // Added to check for price session
     } = useProduct();
 
     const [showSummary, setShowSummary] = useState(false);
@@ -124,10 +127,17 @@ export default function InventoryFab() {
         setCostInputs({}); // Limpiar los inputs de costo para permitir nueva entrada
     };
 
+    // --- VISIBILITY LOGIC ---
+    const hasPendingPriceSession = Object.keys(pendingPrices || {}).length > 0 || Object.keys(pendingCostPrices || {}).length > 0;
+    const isVisible = activeTotal !== 0 && !showSummary && !showConfirm && !showCostModal;
+
+    // Hide inventory FAB in Ajustes if we are currently editing prices/costs
+    const shouldHideInAjustes = location.pathname === '/ajustes' && hasPendingPriceSession;
+
     return (
         <>
             {/* Extended FAB with Text when items actice */}
-            {activeTotal !== 0 && !showSummary && !showConfirm && !showCostModal && (
+            {isVisible && !shouldHideInAjustes && (
                 <button
                     onClick={handleClick}
                     style={{
