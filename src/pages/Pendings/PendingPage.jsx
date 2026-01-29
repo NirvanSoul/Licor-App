@@ -17,7 +17,7 @@ import CloseTicketModal from './modals/CloseTicketModal';
 import SuccessModal from './modals/SuccessModal';
 
 export default function PendingPage() {
-    const { pendingOrders, addItemToOrder, closeOrder, createOrder, calculateOrderTotal, updateOrderName } = useOrder();
+    const { pendingOrders, addItemToOrder, closeOrder, createOrder, calculateOrderTotal, updateOrderName, cancelOrder } = useOrder();
     const { beerTypes, getPrice, currencySymbol, reportWaste, mainCurrency, currentRate, getUnitsPerEmission } = useProduct();
     const { showNotification } = useNotification();
 
@@ -124,6 +124,12 @@ export default function PendingPage() {
         setRenamingOrder(null);
     };
 
+    const handleCancelTicket = async (id) => {
+        if (window.confirm('¿Estás seguro de eliminar este ticket? Esta acción no se puede deshacer.')) {
+            await cancelOrder(id);
+        }
+    };
+
     const handleCloseTicket = async (paymentMethod, reference) => {
         if (!closingOrderData) return;
 
@@ -152,6 +158,7 @@ export default function PendingPage() {
                 isExpanded={expandedOrders[order.id]}
                 onToggle={toggleOrder}
                 onRename={(o) => setRenamingOrder(o)}
+                onDelete={(id) => handleCancelTicket(id)}
                 currencySymbol={currencySymbol}
                 calculateOrderTotal={calculateOrderTotal}
                 getUnitsPerEmission={getUnitsPerEmission}

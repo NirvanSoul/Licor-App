@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronDown, ChevronUp, Pencil, Beer } from 'lucide-react';
+import { ChevronDown, ChevronUp, Pencil, Beer, X } from 'lucide-react';
 import TicketGrid from '../../../components/TicketGrid'; // Adjust path depending on file location
 
 export default function TicketCard({
@@ -7,6 +7,7 @@ export default function TicketCard({
     isExpanded,
     onToggle,
     onRename,
+    onDelete,
     currencySymbol,
     calculateOrderTotal,
     getUnitsPerEmission,
@@ -71,10 +72,34 @@ export default function TicketCard({
                     </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', textAlign: 'right' }}>
-                    <span style={{ color: 'white', fontSize: '0.75rem', fontFamily: 'Poppins, sans-serif', fontWeight: 600 }}>
-                        {new Date(order.createdAt).toLocaleDateString()}
-                    </span>
-                    <span style={{ color: 'white', fontSize: '0.7rem', fontFamily: 'Poppins, sans-serif', fontWeight: 400, marginTop: '2px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                        <span style={{ color: 'white', fontSize: '0.75rem', fontFamily: 'Poppins, sans-serif', fontWeight: 600 }}>
+                            {new Date(order.createdAt).toLocaleDateString()}
+                        </span>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onDelete(order.id);
+                            }}
+                            className="delete-ticket-btn"
+                            style={{
+                                background: 'rgba(239, 68, 68, 0.15)',
+                                border: 'none',
+                                borderRadius: '6px',
+                                width: '24px',
+                                height: '24px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                color: '#ef4444',
+                                marginLeft: '8px'
+                            }}
+                        >
+                            <X size={16} strokeWidth={2.5} />
+                        </button>
+                    </div>
+                    <span style={{ color: 'white', fontSize: '0.7rem', fontFamily: 'Poppins, sans-serif', fontWeight: 400 }}>
                         {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                 </div>

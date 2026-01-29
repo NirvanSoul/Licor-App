@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient';
 import { useAuth } from './AuthContext';
 import { useProduct } from './ProductContext';
 import { useNotification } from './NotificationContext';
-import { fetchSales, createSales, fetchPendingOrders, upsertPendingOrder, updatePendingOrder, deletePendingOrder } from '../services/api';
+import { fetchSales, createSales, fetchPendingOrders, upsertPendingOrder, updatePendingOrder, deletePendingOrder, deleteSale as deleteSaleApi } from '../services/api';
 
 const OrderContext = createContext();
 
@@ -83,7 +83,7 @@ export const OrderProvider = ({ children }) => {
                     new Date(b.createdAt) - new Date(a.createdAt)
                 );
 
-                setPendingOrders(merged.slice(0, 300));
+                setPendingOrders(merged.slice(0, 1000));
                 console.log(`✅ [OrderContext] Sync complete. Loaded ${merged.length} orders.`);
             } catch (err) {
                 console.error("❌ [OrderContext] Error syncing initial data:", err);
@@ -176,7 +176,7 @@ export const OrderProvider = ({ children }) => {
                         const merged = [transformedSale, ...filtered].sort((a, b) =>
                             new Date(b.createdAt) - new Date(a.createdAt)
                         );
-                        return merged.slice(0, 300);
+                        return merged.slice(0, 1000);
                     });
                 }
             })
@@ -350,6 +350,50 @@ export const OrderProvider = ({ children }) => {
             await deletePendingOrder(orderId);
         }
         showNotification('Ticket cancelado', 'info');
+    };
+
+    const deleteSale = async (orderId) => {
+        const order = pendingOrders.find(o => o.id === orderId);
+        if (!order) return;
+
+        // 1. Restore Stock
+        for (const item of order.items) {
+            const beerName = item.beerType || item.name;
+
+            // Handle Variado expansion
+            if (item.beerVariety === 'Variado' && item.composition) {
+                // If it was expanded in the UI/DB, we might not have the composition object if it came freshly from DB fetch?
+                // Actually my fetch logic reconstructs items.
+                // For PAID orders (sales), items are individual rows.
+                // However, my mapped object usually flattens them.
+                // If the sale was "To Go" (Llevar), items are simple product links.
+                // If it was Mixed, they are expanded.
+                // Let's just trust the item props.
+            }
+
+            // Simple Logic: just restore quantity * unit
+            // NOTE: 'emission' in sales history for simple products is usually correct.
+            // But if we optimized 'Local' sales into 'Caja', 'Media Caja', etc., we restore THAT.
+            // Which matches exactly what we want (e.g. return a Box to inventory).
+
+            // For 'Variado' in 'Llevar' mode, we usually deducted Units.
+            // But in 'fetchSales', we might have single items.
+            // Let's handle the generic case:
+            await addStock(beerName, item.emission, item.subtype, item.quantity || 1);
+        }
+
+        // 2. Delete from DB
+        if (organizationId) {
+            const { error } = await deleteSaleApi(orderId);
+            if (error) {
+                showNotification('Error al eliminar venta', 'error');
+                return;
+            }
+        }
+
+        // 3. Update UI
+        setPendingOrders(prev => prev.filter(o => o.id !== orderId));
+        showNotification('Venta eliminada e inventario restaurado', 'success');
     };
 
     // --- Helper: Calculate Total with Local Optimization ---
@@ -733,6 +777,8 @@ export const OrderProvider = ({ children }) => {
             processDirectSale,
             updateOrderItemSlot,
             updateOrderName,
+            updateOrderName,
+            deleteSale, // Exposed
             calculateOrderTotal // Exposed
         }}>
             {children}

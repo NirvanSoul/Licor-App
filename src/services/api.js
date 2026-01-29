@@ -174,6 +174,14 @@ export const createSales = async (salesData) => {
     };
 };
 
+export const deleteSale = async (id) => {
+    const { error } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', id);
+    return { error };
+};
+
 /* =========================================================================
    PRICES
    ========================================================================= */

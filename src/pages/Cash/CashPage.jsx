@@ -23,7 +23,7 @@ import ProfitModal from './modals/ProfitModal';
 
 export default function CashPage() {
     const { role } = useAuth();
-    const { pendingOrders, loading: orderLoading } = useOrder();
+    const { pendingOrders, loading: orderLoading, deleteSale } = useOrder();
     const productContext = useProduct();
     const { productLoading } = productContext || {};
     const { showNotification } = useNotification();
@@ -48,6 +48,7 @@ export default function CashPage() {
     const [dailyDetailDate, setDailyDetailDate] = useState(new Date());
     const [showProfitModal, setShowProfitModal] = useState(false);
     const [showWeeklyModal, setShowWeeklyModal] = useState(false);
+    const [selectedRange, setSelectedRange] = useState('60');
 
     // 3. Security Check (After Hooks)
     const isAuthorized = role === 'OWNER' || role === 'MANAGER' || role === 'DEVELOPER';
@@ -74,11 +75,26 @@ export default function CashPage() {
                 setShowProfitModal(false);
                 setShowWeeklyModal(false);
                 setDailyDetailDate(new Date());
+                setSelectedRange('60');
             }
         };
         window.addEventListener('reset-flow', handleResetFlow);
         return () => window.removeEventListener('reset-flow', handleResetFlow);
     }, []);
+
+    const filteredSalesForTable = useMemo(() => {
+        if (!pendingOrders) return [];
+        const now = new Date();
+        const cutoff = new Date();
+        cutoff.setDate(now.getDate() - Number(selectedRange));
+        cutoff.setHours(0, 0, 0, 0);
+
+        return pendingOrders.filter(o => {
+            if (o.status !== 'PAID') return false;
+            const d = new Date(o.closedAt || o.createdAt);
+            return d >= cutoff;
+        }).sort((a, b) => new Date(b.closedAt || b.createdAt) - new Date(a.closedAt || a.createdAt));
+    }, [pendingOrders, selectedRange]);
 
     // 5. Statistics Calculation (Must be before early returns)
     const getSalesForDate = (date) => {
@@ -199,15 +215,15 @@ export default function CashPage() {
     };
 
     const handleExport = () => {
-        if (todaysSales.length === 0) {
-            alert("No hay ventas para exportar hoy.");
+        if (filteredSalesForTable.length === 0) {
+            alert("No hay ventas para exportar en este rango.");
             return;
         }
 
         const rate = productContext.currentRate || 0;
         const currencySymbol = productContext.currencySymbol;
 
-        const summaryData = todaysSales.map(sale => {
+        const summaryData = filteredSalesForTable.map(sale => {
             const consumptionMap = {};
             (sale.items || []).forEach(item => {
                 if (!item) return;
@@ -246,16 +262,16 @@ export default function CashPage() {
                 'Ref': (sale.paymentMethod && String(sale.paymentMethod).toLowerCase().includes('pago móvil')) ? (sale.reference || '') : 'No Aplica',
                 'Detalle Consumo': consumptionStr,
                 'Usuario': sale.createdBy || 'Desconocido',
-                [`Total (${currencySymbol})`]: parseFloat(sale.total.toFixed(2)),
-                'Total (Bs)': parseFloat((sale.total * rate).toFixed(2)),
+                [`Total (${currencySymbol})`]: parseFloat((sale.totalAmountUsd || 0).toFixed(2)),
+                'Total (Bs)': parseFloat(((sale.totalAmountUsd || 0) * rate).toFixed(2)),
             };
         });
 
         const ws = XLSX.utils.json_to_sheet(summaryData);
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Reporte_Diario");
+        XLSX.utils.book_append_sheet(wb, ws, "Reporte_Caja");
         const dateStr = new Date().toLocaleDateString().replace(/\//g, '-');
-        XLSX.writeFile(wb, `Caja_${dateStr}.xlsx`);
+        XLSX.writeFile(wb, `Caja_Rango_${dateStr}.xlsx`);
     };
 
     return (
@@ -282,11 +298,14 @@ export default function CashPage() {
 
                 {/* TABLE SECTION (Full Width) */}
                 <TransactionList
-                    sales={todaysSales}
+                    sales={filteredSalesForTable}
                     currencySymbol={productContext.currencySymbol}
                     getShortPayment={getShortPayment}
                     onExport={handleExport}
                     onShare={handleShareSale}
+                    onDelete={deleteSale}
+                    range={selectedRange}
+                    onRangeChange={setSelectedRange}
                 />
 
                 {/* BOTTOM ANALYTICS ROW (Weekly & Stock) */}
