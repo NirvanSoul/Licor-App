@@ -1,0 +1,343 @@
+.layout-container {
+    display: flex;
+    flex-direction: row;
+    min-height: 100vh;
+    position: relative;
+    background: var(--bg-main);
+}
+
+@media (max-width: 768px) {
+    .layout-container {
+        flex-direction: column;
+        min-height: 100.1vh;
+    }
+}
+
+.main-nav {
+    padding: 2.5rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    z-index: 10000;
+    transition: all var(--transition-smooth);
+    background: transparent;
+    border-right: 1px solid rgba(0, 0, 0, 0.08);
+    width: 260px;
+    flex-shrink: 0;
+}
+
+/* Desenfocar menú en desktop cuando hay un modal abierto */
+@media (min-width: 769px) {
+    .main-nav.hide-nav-desktop {
+        filter: blur(8px);
+        opacity: 0.3;
+        pointer-events: none;
+        transition: filter 0.3s ease, opacity 0.3s ease;
+    }
+}
+
+.nav-pill {
+    display: flex;
+    flex-direction: column;
+    background: transparent;
+    padding: 0;
+    gap: 0.5rem;
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    height: auto;
+}
+
+/* Sliding pill background - Pure CSS approach */
+.nav-slider {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 52px;
+    top: calc(var(--active-index, 0) * (52px + 0.5rem));
+    background: linear-gradient(135deg, #FA8E36 0%, #F97316 100%);
+    border-radius: var(--radius-full);
+    transition: top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 15px rgba(249, 115, 22, 0.4);
+    z-index: 0;
+    pointer-events: none;
+    will-change: top;
+}
+
+.nav-item {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 1.25rem;
+    padding: 0 1.5rem;
+    height: 52px;
+    width: 100%;
+    border-radius: var(--radius-full);
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    position: relative;
+    z-index: 1;
+}
+
+.nav-icon {
+    width: 20px;
+    height: 20px;
+    transition: transform 0.3s ease;
+    flex-shrink: 0;
+}
+
+.nav-item:hover {
+    background-color: var(--bg-card-hover);
+    transform: translateY(-1px);
+}
+
+.nav-item.active {
+    color: #fff;
+    background: transparent;
+    box-shadow: none;
+    transform: translateY(-1px);
+}
+
+.nav-item.active .nav-icon {
+    stroke: #fff;
+}
+
+.nav-item.active .nav-label {
+    font-weight: 600;
+}
+
+.nav-label {
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.main-content {
+    flex: 1;
+    padding: 2rem;
+    max-width: 1400px;
+    width: 100%;
+    margin: 0;
+    position: relative;
+    will-change: opacity;
+    overflow-y: auto;
+}
+
+/* Dark Mode Sidebar (Desktop only) */
+@media (min-width: 769px) {
+    .dark .main-nav {
+        background: transparent;
+        border-right: 1px solid rgba(255, 255, 255, 0.1);
+    }
+}
+
+/* SALIDA ULTRA RÁPIDA: Sin parpadeos */
+.main-content.slide-out-left {
+    transition: transform 0.12s ease-in, opacity 0.12s ease-in;
+    transform: translateX(-40px);
+    opacity: 0;
+}
+
+.main-content.slide-out-right {
+    transition: transform 0.12s ease-in, opacity 0.12s ease-in;
+    transform: translateX(40px);
+    opacity: 0;
+}
+
+/* ENTRADA RÁPIDA: Con fill-mode para evitar el "blink" */
+.main-content.slide-in-right {
+    animation: slideInFromRight 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.main-content.slide-in-left {
+    animation: slideInFromLeft 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes slideInFromRight {
+    0% {
+        transform: translateX(30px);
+        opacity: 0;
+    }
+
+    100% {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideInFromLeft {
+    0% {
+        transform: translateX(-30px);
+        opacity: 0;
+    }
+
+    100% {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Removed orange glow from menu container */
+.dark .nav-pill {
+    box-shadow: none;
+    border: none;
+}
+
+/* Mobile Media Query */
+@media (max-width: 768px) {
+
+    .main-nav {
+        position: fixed;
+        top: auto;
+        flex-direction: row;
+        bottom: 1rem;
+        width: 100%;
+        height: auto;
+        padding: 0 1rem;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        pointer-events: none;
+        transition: bottom 0.3s ease;
+        z-index: 10000;
+    }
+
+    /* Absolute transparency for mobile containers */
+    .dark .main-nav,
+    .main-nav.compact-wrapper {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    /* COMPACT MODE WRAPPER ADJSUTMENTS */
+    .main-nav.compact-wrapper {
+        bottom: 0.5rem;
+    }
+
+    .nav-pill {
+        flex-direction: row;
+        pointer-events: auto;
+        width: 92%;
+        max-width: 500px;
+        margin: 0 auto;
+        justify-content: center;
+        gap: 0;
+        box-shadow: 0 4px 25px rgba(0, 0, 0, 0.2);
+        padding: 0.4rem;
+        border-radius: var(--radius-full);
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        background: var(--bg-card);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .nav-slider {
+        position: absolute;
+        top: 0.4rem;
+        bottom: 0.4rem;
+        left: calc(0.4rem + (var(--active-index, 0) * ((100% - 0.8rem) / var(--nav-items, 4))));
+        width: calc((100% - 0.8rem) / var(--nav-items, 4));
+        height: auto;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        border-radius: var(--radius-full);
+        will-change: left, width;
+        z-index: 0;
+    }
+
+    .nav-pill.compact .nav-slider {
+        top: 0.4rem;
+        bottom: 0.4rem;
+        border-radius: var(--radius-full);
+    }
+
+    /* COMPACT MODE PILL - Centered expansion */
+    .nav-pill.compact {
+        max-width: 260px;
+        padding: 0.4rem;
+        border-radius: 20px;
+        background: var(--bg-card);
+        backdrop-filter: blur(15px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .dark .nav-pill {
+        background: var(--bg-card);
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .nav-item {
+        min-width: 0;
+        flex: 1;
+        flex-basis: 0;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        padding: 0.6rem 0;
+        border-radius: var(--radius-full);
+        transition: all 0.3s ease;
+        gap: 0.5rem;
+        position: relative;
+        z-index: 1;
+    }
+
+    /* COMPACT MODE ITEM */
+    .nav-pill.compact .nav-item {
+        padding: 0.25rem 0;
+        gap: 0;
+    }
+
+    /* Active item styling for mobile */
+    .nav-item.active {
+        box-shadow: none;
+        border-radius: var(--radius-full);
+    }
+
+    .nav-pill.compact .nav-item.active {
+        box-shadow: none;
+        border-radius: var(--radius-full);
+    }
+
+    .nav-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        max-height: 20px;
+        max-width: 100px;
+        /* Allow expansion */
+        opacity: 1;
+        overflow: hidden;
+        white-space: nowrap;
+    }
+
+    /* COMPACT MODE LABEL & ICON */
+    .nav-pill.compact .nav-label {
+        max-width: 0;
+        max-height: 0;
+        opacity: 0;
+        margin: 0;
+        pointer-events: none;
+    }
+
+    .nav-icon {
+        width: 26px;
+        height: 26px;
+        transition: transform 0.3s ease;
+    }
+
+    .nav-pill.compact .nav-icon {
+        transform: scale(1.1);
+    }
+
+    .main-content {
+        padding: 1rem 1rem 50vh 1rem;
+    }
+}

@@ -1,0 +1,88 @@
+.accordion-section {
+    background-color: var(--bg-card);
+    border-radius: 20px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid var(--accent-light);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.accordion-section:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.accordion-section.open {
+    box-shadow: 0 4px 16px rgba(249, 115, 22, 0.1);
+    border-color: rgba(249, 115, 22, 0.2);
+}
+
+.accordion-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem;
+    /* Aligned with summary badge right-spacing */
+}
+
+.accordion-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-weight: 500;
+    flex: 1;
+    /* Take remaining space */
+    margin-right: 0;
+    /* Removed margin so content touches right padding */
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.accordion-title {
+    font-size: 1rem;
+}
+
+.selection-preview {
+    background: linear-gradient(135deg, #FA8E36 0%, #F97316 100%);
+    color: white;
+    padding: 0.35rem 0.85rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    box-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
+    text-transform: capitalize;
+}
+
+.accordion-action {
+    /* Container for the switch */
+    display: flex;
+    align-items: center;
+    margin-left: 1rem;
+    /* Spacing between title/label and the switch */
+}
+
+.accordion-content {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+}
+
+.accordion-section.open .accordion-content {
+    max-height: 2000px;
+    opacity: 1;
+}
+
+.accordion-inner {
+    padding: 1rem 1rem 1.5rem 1rem;
+    /* Added top padding to prevent button hover clipping */
+}

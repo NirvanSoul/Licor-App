@@ -1,0 +1,238 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400&display=swap');
+
+:root {
+  /* Colors - Light Default */
+  --bg-app: #f5f5f7;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f9fafb;
+  --bg-input: #ffffff;
+
+  --text-primary: #1a1a1a;
+  --text-secondary: #8e8e93;
+  --text-muted: #c7c7cc;
+
+  --accent: #000000;
+  --accent-light: #e5e5ea;
+  --accent-color: #F97316;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-soft: 0 20px 40px rgba(0, 0, 0, 0.08);
+
+  /* Radius */
+  --radius-sm: 0.5rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.5rem;
+  --radius-full: 9999px;
+
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Dark Mode Overrides */
+/* Dark Mode Overrides */
+.dark {
+  --bg-app: #000000;
+  /* Deep black for OLED/High contrast */
+  --bg-card: #1c1c1e;
+  /* Dark gray for cards */
+  --bg-card-hover: #2c2c2e;
+  --bg-input: #2c2c2e;
+  /* Slightly lighter for inputs */
+
+  --text-primary: #ffffff;
+  --text-secondary: #e2e2e2;
+  /* Lighter secondary for better readability against dark */
+  --text-muted: #a1a1aa;
+
+  --accent: #ffffff;
+  --accent-light: #3a3a3c;
+  --accent-color: #F97316;
+
+  /* Adjust shadows for dark mode visibility (often lighter/glowy or just subtler) */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  --shadow-soft: 0 20px 40px rgba(0, 0, 0, 0.6);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Poppins', sans-serif;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+  min-height: 100vh;
+  transition: background-color var(--transition-smooth), color var(--transition-smooth);
+}
+
+#root {
+  min-height: 100%;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: inherit;
+}
+
+.icon {
+  width: 24px;
+  height: 24px;
+}
+
+/* Utilities */
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.text-sm {
+  font-size: 0.875rem;
+}
+
+.text-lg {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.font-medium {
+  font-weight: 500;
+}
+
+/* Color Utilities */
+.text-primary {
+  color: var(--text-primary);
+}
+
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+/* Global Layout Utilities */
+.page-container {
+  padding: 2rem;
+  background-color: var(--bg-app);
+  min-height: 100vh;
+  transition: background-color var(--transition-smooth);
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 640px) {
+  .page-container {
+    padding: 1rem;
+  }
+}
+
+/* Utility to hide number spinners */
+input[type=number].no-spin::-webkit-inner-spin-button,
+input[type=number].no-spin::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type=number].no-spin {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+/* Utility to hide scrollbar but keep functionality */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Reusable Search Bar Styles */
+.app-search-container {
+  position: relative;
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.app-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+.app-search-input {
+  width: 100%;
+  padding: 12px 12px 12px 40px;
+  border-radius: 12px;
+  border: 1px solid var(--accent-light);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-family: 'Poppins', sans-serif;
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.app-search-input:focus {
+  border-color: var(--text-primary);
+  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Global Primary Gradient Button */
+.btn-primary-gradient {
+  background: linear-gradient(135deg, #FA8E36 0%, #F97316 100%) !important;
+  color: white !important;
+  padding: 1rem;
+  border-radius: 16px;
+  border: none;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(250, 142, 54, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: block;
+  width: 100%;
+  text-align: center;
+  text-decoration: none;
+  outline: none;
+}
+
+.btn-primary-gradient:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(250, 142, 54, 0.4);
+}
+
+.btn-primary-gradient:active {
+  transform: translateY(-1px);
+}
+
+.btn-primary-gradient:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}

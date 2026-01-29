@@ -1,0 +1,974 @@
+import React, { useState } from 'react';
+import { useOrder } from '../context/OrderContext';
+import { useProduct } from '../context/ProductContext';
+import { useNotification } from '../context/NotificationContext';
+import { Clock, Plus, Beer, MoreVertical, X, CheckCircle, ChevronDown, ChevronUp, Search, History, Store, User, Hash, AlertCircle, Pencil } from 'lucide-react';
+import TicketGrid from '../components/TicketGrid';
+import ContainerSelector from '../components/ContainerSelector';
+import './PendingPage.css'; // We will create this
+
+// Custom Icon Component
+const BrokenBottleIcon = ({ size = 20, color = 'currentColor', ...props }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <path d="M12.0623 6.64336C12.3551 6.9947 12.5204 7.43956 12.5204 7.89679L12.5204 12V14M12.5204 14L15.5204 16M12.5204 14L9.52045 16M17.1517 7.04279L19.531 4.66348C19.9576 4.23693 20.0886 3.59301 19.8606 3.04265L19.6469 2.52682C19.3499 1.80996 18.5284 1.46506 17.8105 1.75836L17.2947 1.9691C16.8291 2.15933 16.5173 2.59368 16.5173 3.09633V5.51136C16.5173 6.04169 16.3066 6.5503 15.9315 6.92542L11.5833 11.2736C11.3323 11.5246 11.3323 11.9317 11.5833 12.1827L14.7374 15.3367C15.0219 15.6213 15.0219 16.0827 14.7374 16.3672L8.2736 22.831C7.94052 23.1641 7.42941 23.1641 7.09633 22.831L4.66723 20.4019C4.41727 20.152 4.41727 19.7468 4.66723 19.4969L7.56839 16.5957C7.63229 16.5318 7.63229 16.4282 7.56839 16.3643L6.09633 14.8922C5.76326 14.5592 5.76326 14.0192 6.09633 13.6861L9.04943 10.733C9.42456 10.3579 9.63529 9.84925 9.63529 9.31893V7.12643" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M7 3L5 5" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M12 2L10 4" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M5 8L3 10" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+);
+
+export default function PendingPage() {
+    const { pendingOrders, addItemToOrder, closeOrder, createOrder, calculateOrderTotal, updateOrderName } = useOrder();
+    const { getBsPrice, beerTypes, exchangeRates, getPrice, currencySymbol, reportWaste, mainCurrency, currentRate, getUnitsPerEmission } = useProduct();
+    const [selectedOrder, setSelectedOrder] = useState(null); // For "Add Item" modal
+    const [closingOrderId, setClosingOrderId] = useState(null); // For "Confirm Close" modal
+    const [showOpenTabModal, setShowOpenTabModal] = useState(false);
+    const [newTabName, setNewTabName] = useState('');
+    const [quickAddSubtype, setQuickAddSubtype] = useState('Botella');
+    const [showWasteModal, setShowWasteModal] = useState(false);
+    const [wasteSelection, setWasteSelection] = useState({ beer: '', quantity: 1 });
+
+    // Success Modal after closing
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [closedOrderInfo, setClosedOrderInfo] = useState(null);
+
+    // Renaming state
+    const [renamingOrder, setRenamingOrder] = useState(null);
+    const [newNameValue, setNewNameValue] = useState('');
+
+    // Notification
+    const { showNotification } = useNotification();
+
+    // Payment State for closing
+    const [paymentMethod, setPaymentMethod] = useState(null);
+    const [paymentReference, setPaymentReference] = useState('');
+    const paymentMethods = ['Efectivo', 'Pago Móvil', 'Punto', 'Bio Pago'];
+
+
+
+    const handleQuickOpenTab = () => {
+        setNewTabName('');
+        // setPaymentMethod(null);
+        setPaymentReference('');
+        setShowOpenTabModal(true);
+    };
+
+    const confirmOpenTab = () => {
+        // setPaymentMethod(null); // No payment for open tab
+        setPaymentReference('');
+        createOrder(newTabName.trim() || 'Anónimo', [], 'Local', null, '');
+        setShowOpenTabModal(false);
+        setNewTabName('');
+        if (showNotification) showNotification('Carta abierta exitosamente', 'success');
+    };
+
+    // Collapsible State (Store expanded IDs)
+    // Default: All Expanded? Or Start Empty? 
+    // Let's default to Empty or tracking clicks. 
+    // User asked for "collapsable", usually implies initially closed or togglable.
+    const [expandedOrders, setExpandedOrders] = useState({});
+
+    const toggleOrder = (id) => {
+        setExpandedOrders(prev => ({
+            ...prev,
+            [id]: !prev[id]
+        }));
+    };
+
+    // Search State
+    const [searchTerm, setSearchTerm] = useState('');
+
+    // 1. Filter OPEN orders
+    const openOrders = pendingOrders.filter(o => o.status === 'OPEN');
+
+    // 2. Filter by Search Term
+    const filteredOrders = openOrders.filter(order => {
+        if (!searchTerm) return true;
+        const term = searchTerm.toLowerCase().trim();
+        const name = order.customerName.toLowerCase();
+        const ticket = order.ticketNumber.toString();
+
+        return (
+            name.includes(term) ||
+            (name.length > 1 && term.includes(name)) ||
+            ticket.includes(term)
+        );
+    });
+
+    // 3. Split by Date (Today vs Previous)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const todaysOrders = [];
+    const previousOrders = [];
+
+    filteredOrders.forEach(order => {
+        // Ensure creation time exists, fallback to now if broken data
+        const orderDate = new Date(order.createdAt || Date.now());
+        orderDate.setHours(0, 0, 0, 0);
+
+        if (orderDate.getTime() === today.getTime()) {
+            todaysOrders.push(order);
+        } else {
+            previousOrders.push(order);
+        }
+    });
+
+    const getOrderTotal = (items, type) => {
+        // Use the centralized logic from OrderContext (returns { totalBs, totalUsd })
+        const { totalUsd } = calculateOrderTotal(items, type);
+        return totalUsd;
+    }
+
+    // LIST RENDERER
+    const renderOrderList = (orders) => (
+        orders.map(order => {
+            const isOpenTab = order.items.some(i => i.emission === 'Libre');
+            const isComplete = order.items.every(item => {
+                if (item.emission === 'Libre') return true;
+                const targetUnits = getUnitsPerEmission(item.emission, item.subtype) * (item.quantity || 1);
+                const filledUnits = (item.slots || []).filter(s => s !== null).length;
+                return filledUnits >= targetUnits;
+            });
+
+            return (
+                <div key={order.id} className={`order-card ${expandedOrders[order.id] ? 'expanded' : ''}`}>
+                    <div
+                        className="order-header"
+                        onClick={() => toggleOrder(order.id)}
+                    >
+                        <div className="order-title-group">
+                            <div className="collapse-icon">
+                                {expandedOrders[order.id] ? <ChevronUp size={20} className="text-secondary" /> : <ChevronDown size={20} className="text-secondary" />}
+                            </div>
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <h3 className="customer-name">{order.customerName}</h3>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setRenamingOrder(order);
+                                            setNewNameValue(order.customerName);
+                                        }}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            padding: '4px',
+                                            cursor: 'pointer',
+                                            color: 'var(--text-secondary)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            opacity: 0.6,
+                                            transition: 'opacity 0.2s'
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                                        onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
+                                    >
+                                        <Pencil size={14} />
+                                    </button>
+                                    {isOpenTab && (
+                                        <span style={{
+                                            background: 'linear-gradient(135deg, #F97316 0%, #EA580C 100%)',
+                                            padding: '2px 8px',
+                                            borderRadius: '8px',
+                                            fontSize: '0.75rem',
+                                            color: 'white',
+                                            fontWeight: '700'
+                                        }}>
+                                            Carta Abierta
+                                        </span>
+                                    )}
+                                </div>
+                                <span className="ticket-number">#{order.ticketNumber}</span>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', textAlign: 'right' }}>
+                            <span style={{
+                                color: 'white',
+                                fontSize: '0.75rem',
+                                fontFamily: 'Poppins, sans-serif',
+                                fontWeight: 600
+                            }}>
+                                {new Date(order.createdAt).toLocaleDateString()}
+                            </span>
+                            <span style={{
+                                color: 'white',
+                                fontSize: '0.7rem',
+                                fontFamily: 'Poppins, sans-serif',
+                                fontWeight: 400,
+                                marginTop: '2px'
+                            }}>
+                                {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                        </div>
+                    </div>
+
+                    {expandedOrders[order.id] && (
+                        <>
+                            <div className="order-items-list">
+                                {order.items.length > 0 ? (
+                                    order.items.map((item, idx) => (
+                                        <div key={idx}>
+                                            <TicketGrid
+                                                orderId={order.id}
+                                                item={item}
+                                                itemIndex={idx}
+                                            />
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div style={{
+                                        padding: '2rem 1rem',
+                                        textAlign: 'center',
+                                        color: 'var(--text-secondary)',
+                                        background: 'var(--bg-app)',
+                                        borderRadius: '12px',
+                                        border: '1px dashed var(--accent-light)',
+                                        marginBottom: '1rem'
+                                    }}>
+                                        <Beer size={32} style={{ marginBottom: '0.5rem', opacity: 0.3 }} />
+                                        <p style={{ fontSize: '0.9rem', fontWeight: 500 }}>Carta abierta sin productos</p>
+                                        <p style={{ fontSize: '0.75rem', opacity: 0.7 }}>Usa "Añadir Producto" para comenzar</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="order-footer">
+                                <div className="total-row">
+                                    <span className="label">Total Estimado</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        {(() => {
+                                            const { totalUsd, details } = calculateOrderTotal(order.items, order.type);
+                                            return (
+                                                <>
+                                                    <div style={{ display: 'flex', gap: '4px' }}>
+                                                        {(details || []).map((d, i) => (
+                                                            <span key={i} style={{
+                                                                background: 'rgba(52, 199, 89, 0.15)',
+                                                                color: '#34c759',
+                                                                fontSize: '0.7rem',
+                                                                padding: '2px 6px',
+                                                                borderRadius: '6px',
+                                                                fontWeight: 600
+                                                            }}>
+                                                                {d}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                    <span className="amount">{currencySymbol}{totalUsd.toFixed(2)}</span>
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
+                                </div>
+                                <div className="actions-row" style={{ marginTop: '0.5rem', display: 'flex', gap: '0.75rem' }}>
+                                    <button
+                                        className={`action-btn close-ticket-btn ${!isComplete ? 'disabled' : ''}`}
+                                        disabled={!isComplete}
+                                        onClick={async () => {
+                                            const { totalBs, totalUsd } = calculateOrderTotal(order.items, order.type);
+                                            await closeOrder(order.id, order.paymentMethod || 'Efectivo', order.reference || '');
+                                            setClosedOrderInfo({
+                                                ticketNumber: order.ticketNumber,
+                                                totalBs,
+                                                totalUsd,
+                                                customerName: order.customerName
+                                            });
+                                            setShowSuccessModal(true);
+                                        }}
+                                        style={{
+                                            flex: 1,
+                                            opacity: isComplete ? 1 : 0.5,
+                                            cursor: isComplete ? 'pointer' : 'not-allowed',
+                                            filter: isComplete ? 'none' : 'grayscale(0.5)'
+                                        }}
+                                    >
+                                        {isComplete ? 'Cerrar Ticket' : 'Llenar Ticket'}
+                                    </button>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </div>
+            );
+        })
+    );
+
+
+
+    const handleReportWaste = async () => {
+        if (!wasteSelection.beer) return;
+        await reportWaste(wasteSelection.beer, 'Botella', wasteSelection.quantity); // Default to Botella for now
+        setShowWasteModal(false);
+        setWasteSelection({ beer: '', quantity: 1 });
+    };
+
+    return (
+        <div className="page-container">
+            <header className="page-header" style={{ marginBottom: '1.5rem', display: 'block' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                    <div>
+                        <h1 className="text-2xl font-bold text-primary">Cuentas Abiertas</h1>
+                        <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.95rem' }}>Gestión de tickets y consumos pendientes</p>
+                    </div>
+                    <div className="header-badges" style={{ display: 'flex', gap: '8px' }}>
+                        <span className="badge-active">{openOrders.length} Activas</span>
+                    </div>
+                </div>
+
+                {/* NUEVO: Controles Rápidos para Carta Abierta y Merma */}
+                <div style={{
+                    background: 'var(--bg-card)',
+                    padding: '1rem',
+                    borderRadius: '16px',
+                    border: '1px solid var(--accent-light)',
+                    marginBottom: '1.5rem',
+                    display: 'flex',
+                    gap: '0.75rem',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+                }}>
+                    <button
+                        onClick={handleQuickOpenTab}
+                        className="open-tab-btn"
+                    >
+                        <Plus size={20} />
+                        Abrir Carta
+                    </button>
+
+                    <button
+                        onClick={() => setShowWasteModal(true)}
+                        className="waste-report-btn"
+                        style={{
+                            background: 'var(--bg-card)',
+                            color: '#EF4444',
+                            border: '1px solid #ef444440',
+                            padding: '0 1.25rem',
+                            borderRadius: '12px',
+                            fontSize: '0.85rem',
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            whiteSpace: 'nowrap'
+                        }}
+                    >
+                        <X size={18} />
+                        Botella Rota
+                    </button>
+                </div>
+
+                {/* Search Bar */}
+                <div className="app-search-container">
+                    <Search className="app-search-icon" size={20} />
+                    <input
+                        type="text"
+                        placeholder="Buscar por cliente o número de ticket..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="app-search-input"
+                    />
+                </div>
+            </header>
+
+            <div className="orders-content">
+                {/* Today's Orders (Now First) */}
+                {/* Today's Orders (Now First) */}
+                {todaysOrders.length > 0 && (
+                    <div style={{ marginBottom: '2rem' }}>
+                        {/* Optional Header for Today if desired, or just list */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', color: 'var(--text-primary)' }}>
+                            <Store size={20} className="text-success" />
+                            <h2 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Tickets Activos (Hoy)</h2>
+                        </div>
+                        <div className="orders-grid">
+                            {renderOrderList(todaysOrders)}
+                        </div>
+                    </div>
+                )}
+
+                {/* Previous Orders Section (Now Last) */}
+                {previousOrders.length > 0 && (
+                    <div className="previous-orders-section" style={{ marginTop: '1rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', color: '#F59E0B' }}>
+                            <History size={20} />
+                            <h2 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Tickets Pendientes</h2>
+                        </div>
+                        <div className="orders-grid">
+                            {renderOrderList(previousOrders)}
+                        </div>
+                        <hr style={{ margin: '2rem 0', borderColor: 'var(--accent-light)', opacity: 0.3 }} />
+                    </div>
+                )}
+
+                {/* Empty State */}
+                {todaysOrders.length === 0 && previousOrders.length === 0 && (
+                    <div className="empty-state">
+                        <Clock size={48} className="text-muted mb-4" />
+                        <p className="text-secondary">
+                            {searchTerm ? 'No se encontraron tickets' : 'No hay cuentas abiertas hoy'}
+                        </p>
+                    </div>
+                )}
+            </div>
+
+            {/* Quick Add Modal */}
+            {selectedOrder && (
+                <div className="pending-modal-overlay" onClick={() => setSelectedOrder(null)}>
+                    <div className="pending-modal-content" onClick={e => e.stopPropagation()}>
+                        <div className="pending-modal-header">
+                            <div>
+                                <h3 className="pending-modal-title">Agregar Producto</h3>
+                                <p className="pending-modal-subtitle">Cliente: {selectedOrder.customerName}</p>
+                            </div>
+                            <button className="close-btn" onClick={() => setSelectedOrder(null)}>
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        <div className="quick-add-form">
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                <h4 className="section-title">Selecciona Producto</h4>
+                                <ContainerSelector value={quickAddSubtype} onChange={setQuickAddSubtype} />
+                            </div>
+
+                            <div className="selector-grid" style={{ maxHeight: '300px', overflowY: 'auto', padding: '4px' }}>
+                                {beerTypes.map(beer => (
+                                    <button
+                                        key={beer}
+                                        className="option-btn"
+                                        style={{
+                                            padding: '0.75rem',
+                                            fontSize: '0.9rem',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            gap: '4px'
+                                        }}
+                                        onClick={() => {
+                                            addItemToOrder(selectedOrder.id, {
+                                                beerType: beer,
+                                                subtype: quickAddSubtype,
+                                                emission: 'Unidad', // Default to unit for quick add bar service
+                                                quantity: 1,
+                                                price: getPrice(beer, 'Unidad', quickAddSubtype, 'local'),
+                                                consumptionMode: 'Local'
+                                            });
+                                            // Optional: Don't close modal to allow adding multiples
+                                            // setSelectedOrder(null); 
+                                        }}
+                                    >
+                                        <Beer size={18} />
+                                        <span style={{ textAlign: 'center' }}>{beer}</span>
+                                        <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>
+                                            {currencySymbol}{getPrice(beer, 'Unidad', quickAddSubtype, 'local').toFixed(2)}
+                                        </span>
+                                    </button>
+                                ))
+                                }</div>
+                            <p className="modal-footer-text" style={{ marginTop: '1rem' }}>
+                                Se agregará 1 unidad ({quickAddSubtype}) al ticket.
+                                <br />Puedes seguir agregando o cerrar para terminar.
+                            </p>
+                            <button
+                                className="action-btn"
+                                style={{ width: '100%', marginTop: '1rem', background: 'var(--accent-color)', color: 'white' }}
+                                onClick={() => setSelectedOrder(null)}
+                            >
+                                Terminar de Agregar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* WASTE REPORT MODAL */}
+            {showWasteModal && (
+                <div className="pending-modal-overlay" onClick={() => setShowWasteModal(false)}>
+                    <div className="pending-modal-content" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
+                        <div className="pending-modal-header">
+                            <div>
+                                <h3 className="pending-modal-title" style={{ color: '#EF4444' }}>Reportar Botella Rota</h3>
+                                <p className="pending-modal-subtitle">Registra botellas rotas o daños</p>
+                            </div>
+                            <button className="close-btn" onClick={() => setShowWasteModal(false)}>
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        <div style={{ padding: '0.5rem 0' }}>
+                            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                                Cerveza Dañada
+                            </label>
+                            <div className="selector-grid" style={{ maxHeight: '200px', overflowY: 'auto', marginBottom: '1.5rem' }}>
+                                {beerTypes.map(beer => (
+                                    <button
+                                        key={beer}
+                                        className={`option-btn ${wasteSelection.beer === beer ? 'selected' : ''}`}
+                                        onClick={() => setWasteSelection(prev => ({ ...prev, beer }))}
+                                        style={{ padding: '0.75rem', fontSize: '0.9rem' }}
+                                    >
+                                        {beer}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                                Cantidad (Unidades)
+                            </label>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', justifyContent: 'center' }}>
+                                <button
+                                    onClick={() => setWasteSelection(prev => ({ ...prev, quantity: Math.max(1, prev.quantity - 1) }))}
+                                    style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'var(--bg-app)', border: '1px solid var(--accent-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                    <ChevronDown size={20} color="var(--text-primary)" />
+                                </button>
+                                <input
+                                    type="number"
+                                    inputMode="numeric"
+                                    value={wasteSelection.quantity}
+                                    onChange={(e) => {
+                                        const val = parseInt(e.target.value, 10);
+                                        if (!isNaN(val)) {
+                                            setWasteSelection(prev => ({ ...prev, quantity: Math.max(0, val) }));
+                                        } else if (e.target.value === '') {
+                                            setWasteSelection(prev => ({ ...prev, quantity: 0 }));
+                                        }
+                                    }}
+                                    onFocus={(e) => e.target.select()}
+                                    style={{
+                                        fontSize: '1.5rem',
+                                        fontWeight: 700,
+                                        color: 'var(--text-primary)',
+                                        width: '100px',
+                                        textAlign: 'center',
+                                        background: 'transparent',
+                                        border: 'none',
+                                        outline: 'none',
+                                        WebkitAppearance: 'none',
+                                        MozAppearance: 'textfield'
+                                    }}
+                                />
+                                <button
+                                    onClick={() => setWasteSelection(prev => ({ ...prev, quantity: prev.quantity + 1 }))}
+                                    style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'var(--bg-app)', border: '1px solid var(--accent-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                    <ChevronUp size={20} color="var(--text-primary)" />
+                                </button>
+                            </div>
+
+                            <button
+                                className="action-btn"
+                                disabled={!wasteSelection.beer}
+                                style={{
+                                    width: '100%',
+                                    background: !wasteSelection.beer ? 'var(--bg-card-hover)' : '#EF4444',
+                                    color: 'white',
+                                    opacity: !wasteSelection.beer ? 0.5 : 1
+                                }}
+                                onClick={handleReportWaste}
+                            >
+                                Confirmar Reporte
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Confirm Close Modal */}
+            {closingOrderId && (() => {
+                const orderToClose = pendingOrders.find(o => o.id === closingOrderId);
+                if (!orderToClose) return null;
+                const totalUsd = getOrderTotal(orderToClose.items, orderToClose.type);
+                const totalBs = totalUsd * (currentRate || 0);
+                // An order is an 'Open Tab' if it doesn't have a payment method yet (it needs to be cobrar-ed at closing)
+                const isOpenTab = !orderToClose.paymentMethod;
+
+                // If it's NOT an open tab, they already paid or pay elsewhere (Pre-Pagado). 
+                // If the payment method was already defined in "Vender", we just confirm.
+                if (!isOpenTab) {
+                    const hasPredefinedPayment = !!orderToClose.paymentMethod;
+
+                    return (
+                        <div className="pending-modal-overlay" onClick={() => { setClosingOrderId(null); setPaymentMethod(null); setPaymentReference(''); }}>
+                            <div className="pending-modal-content" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
+                                <div className="pending-modal-header">
+                                    <h3 className="pending-modal-title">Confirmar Entrega</h3>
+                                    <button className="close-btn" onClick={() => { setClosingOrderId(null); setPaymentMethod(null); setPaymentReference(''); }}>
+                                        <X size={24} />
+                                    </button>
+                                </div>
+
+                                <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+                                        <div style={{
+                                            background: 'rgba(249, 115, 22, 0.1)',
+                                            width: '64px', height: '64px', borderRadius: '50%',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                        }}>
+                                            <CheckCircle size={32} style={{ color: '#F97316' }} />
+                                        </div>
+                                    </div>
+                                    <p className="pending-modal-subtitle" style={{ fontSize: '0.95rem' }}>
+                                        El cliente <b>{orderToClose.customerName}</b> retira su pedido.
+                                        {hasPredefinedPayment ? (
+                                            <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                                Método Registrado: <b style={{ color: 'var(--accent-color)' }}>{orderToClose.paymentMethod.replace('Pre-Pagado - ', '')}</b>
+                                            </div>
+                                        ) : (
+                                            <><br />Indica el método de pago utilizado.</>
+                                        )}
+                                    </p>
+                                </div>
+
+                                {!hasPredefinedPayment && (
+                                    <>
+                                        <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--text-primary)' }}>Método de Pago</h4>
+                                        <div className="payment-methods-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem', marginBottom: '1.5rem' }}>
+                                            {paymentMethods.map(method => (
+                                                <button
+                                                    key={method}
+                                                    className={`option-btn ${paymentMethod === method ? 'selected' : ''}`}
+                                                    onClick={() => setPaymentMethod(method)}
+                                                    style={{ padding: '0.75rem', fontSize: '0.85rem' }}
+                                                >
+                                                    {method}
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {paymentMethod === 'Pago Móvil' && (
+                                            <div style={{ marginBottom: '1.5rem' }}>
+                                                <div style={{ position: 'relative' }}>
+                                                    <Hash size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Referencia"
+                                                        value={paymentReference}
+                                                        onChange={(e) => { if (/^\d*$/.test(e.target.value)) setPaymentReference(e.target.value); }}
+                                                        inputMode="numeric"
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '12px 12px 12px 40px',
+                                                            borderRadius: '12px',
+                                                            border: '1px solid var(--accent-light)',
+                                                            background: 'var(--bg-app)',
+                                                            color: 'var(--text-primary)',
+                                                            fontSize: '1rem',
+                                                            outline: 'none'
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+
+                                <div className="actions-row">
+                                    <button
+                                        className="action-btn"
+                                        style={{ background: 'var(--bg-card-hover)', color: 'var(--text-secondary)', padding: '0.75rem', justifyContent: 'center' }}
+                                        onClick={() => { setClosingOrderId(null); setPaymentMethod(null); setPaymentReference(''); }}
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        className="action-btn close-ticket-btn"
+                                        disabled={!hasPredefinedPayment && (!paymentMethod || (paymentMethod === 'Pago Móvil' && !paymentReference.trim()))}
+                                        style={{
+                                            padding: '0.75rem', justifyContent: 'center',
+                                            background: 'linear-gradient(135deg, #F97316 0%, #EA580C 100%)', color: 'white',
+                                            opacity: (!hasPredefinedPayment && (!paymentMethod || (paymentMethod === 'Pago Móvil' && !paymentReference.trim()))) ? 0.5 : 1
+                                        }}
+                                        onClick={() => {
+                                            const finalMethod = hasPredefinedPayment ? orderToClose.paymentMethod : `Pre-Pagado - ${paymentMethod}`;
+                                            const finalRef = hasPredefinedPayment ? orderToClose.reference : paymentReference;
+                                            closeOrder(closingOrderId, finalMethod, finalRef);
+                                            setClosingOrderId(null);
+                                            setPaymentMethod(null);
+                                            setPaymentReference('');
+                                        }}
+                                    >
+                                        Confirmar Entrega
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                }
+
+                // If OPEN TAB, show Payment Modal
+                return (
+                    <div className="pending-modal-overlay">
+                        <div className="pending-modal-content" style={{ maxWidth: '450px' }}>
+                            <div className="pending-modal-header">
+                                <h3 className="pending-modal-title">Cerrar Ticket y Cobrar</h3>
+                                <button className="close-btn" onClick={() => { setClosingOrderId(null); setPaymentMethod(null); setPaymentReference(''); }}>
+                                    <X size={24} />
+                                </button>
+                            </div>
+
+                            <div style={{ textAlign: 'center', marginBottom: '1.5rem', background: 'var(--bg-app)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--accent-light)' }}>
+                                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Total a cobrar ({orderToClose.customerName})</p>
+                                <div style={{ fontSize: '2.5rem', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1 }}>
+                                    ${totalUsd.toFixed(2)}
+                                </div>
+                                <div style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--accent-color)', marginTop: '0.5rem' }}>
+                                    {totalBs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs
+                                </div>
+                                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+                                    {mainCurrency === 'USD' ? 'Tasa Dólar BCV' : (mainCurrency === 'EUR' ? 'Tasa Euro BCV' : 'Tasa Personalizada')}: {currentRate} Bs/$
+                                </p>
+                            </div>
+
+                            <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--text-primary)' }}>Selecciona Método de Pago</h4>
+                            <div className="payment-methods-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem', marginBottom: '1.5rem' }}>
+                                {paymentMethods.map(method => (
+                                    <button
+                                        key={method}
+                                        className={`option-btn ${paymentMethod === method ? 'selected' : ''}`}
+                                        onClick={() => setPaymentMethod(method)}
+                                        style={{ padding: '0.75rem', fontSize: '0.85rem' }}
+                                    >
+                                        {method}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {paymentMethod === 'Pago Móvil' && (
+                                <div style={{ marginBottom: '1.5rem' }}>
+                                    <div style={{ position: 'relative' }}>
+                                        <Hash size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+                                        <input
+                                            type="text"
+                                            placeholder="Referencia"
+                                            value={paymentReference}
+                                            onChange={(e) => { if (/^\d*$/.test(e.target.value)) setPaymentReference(e.target.value); }}
+                                            inputMode="numeric"
+                                            style={{
+                                                width: '100%',
+                                                padding: '12px 12px 12px 40px',
+                                                borderRadius: '12px',
+                                                border: '1px solid var(--accent-light)',
+                                                background: 'var(--bg-app)',
+                                                color: 'var(--text-primary)',
+                                                fontSize: '1rem',
+                                                outline: 'none'
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {!paymentMethod && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: '#F59E0B', marginBottom: '1.5rem', justifyContent: 'center' }}>
+                                    <AlertCircle size={18} />
+                                    <span>Selecciona un método para poder cobrar</span>
+                                </div>
+                            )}
+
+                            <div className="actions-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                                <button
+                                    className="action-btn"
+                                    style={{ background: 'var(--bg-card-hover)', color: 'var(--text-secondary)' }}
+                                    onClick={() => { setClosingOrderId(null); setPaymentMethod(null); setPaymentReference(''); }}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    className="action-btn close-ticket-btn"
+                                    disabled={!paymentMethod || (paymentMethod === 'Pago Móvil' && !paymentReference.trim())}
+                                    style={{
+                                        opacity: (!paymentMethod || (paymentMethod === 'Pago Móvil' && !paymentReference.trim())) ? 0.5 : 1,
+                                        background: 'linear-gradient(135deg, #F97316 0%, #EA580C 100%)',
+                                        color: 'white'
+                                    }}
+                                    onClick={() => {
+                                        closeOrder(closingOrderId, paymentMethod, paymentReference);
+                                        setClosingOrderId(null);
+                                        setPaymentMethod(null);
+                                        setPaymentReference('');
+                                    }}
+                                >
+                                    Cobrar y Cerrar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+
+            {/* RENAME MODAL */}
+            {renamingOrder && (
+                <div className="pending-modal-overlay" onClick={() => setRenamingOrder(null)}>
+                    <div className="pending-modal-content" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
+                        <div className="pending-modal-header">
+                            <div>
+                                <h3 className="pending-modal-title">Renombrar Ticket</h3>
+                                <p className="pending-modal-subtitle">Ticket #{renamingOrder.ticketNumber}</p>
+                            </div>
+                            <button className="close-btn" onClick={() => setRenamingOrder(null)}>
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        <div style={{ padding: '0.5rem 0' }}>
+                            <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
+                                <User size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+                                <input
+                                    type="text"
+                                    autoFocus
+                                    className="ticket-input-large"
+                                    value={newNameValue}
+                                    onChange={(e) => setNewNameValue(e.target.value)}
+                                    placeholder="Nombre del Cliente (Opcional)"
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            updateOrderName(renamingOrder.id, newNameValue.trim() || 'Anónimo');
+                                            setRenamingOrder(null);
+                                        }
+                                    }}
+                                    style={{ paddingLeft: '40px', width: '100%' }}
+                                />
+                            </div>
+
+                            <button
+                                className="action-btn"
+                                style={{
+                                    width: '100%',
+                                    background: 'linear-gradient(135deg, #fb923c 0%, #f97316 100%)',
+                                    color: 'white'
+                                }}
+                                onClick={() => {
+                                    updateOrderName(renamingOrder.id, newNameValue.trim() || 'Anónimo');
+                                    setRenamingOrder(null);
+                                }}
+                            >
+                                Guardar Cambios
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* SUCCESS MODAL AFTER CLOSING */}
+            {showSuccessModal && closedOrderInfo && (
+                <div className="pending-modal-overlay">
+                    <div className="pending-modal-content" style={{ maxWidth: '400px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
+                            <div style={{
+                                width: '80px', height: '80px', borderRadius: '50%',
+                                background: 'rgba(52, 199, 89, 0.1)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center'
+                            }}>
+                                <CheckCircle size={48} color="#34c759" />
+                            </div>
+                        </div>
+                        <h3 className="pending-modal-title" style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>Ticket Cerrado</h3>
+                        <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+                            El ticket <b>#{closedOrderInfo.ticketNumber}</b> de <b>{closedOrderInfo.customerName}</b> ha sido procesado exitosamente.
+                        </p>
+                        <div style={{ background: 'var(--bg-app)', padding: '1rem', borderRadius: '12px', marginBottom: '2rem' }}>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Total Registrado</div>
+                            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#34c759' }}>{closedOrderInfo.totalBs.toLocaleString('es-VE')} Bs</div>
+                            <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>${closedOrderInfo.totalUsd.toFixed(2)}</div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <button
+                                className="action-btn"
+                                style={{
+                                    background: 'linear-gradient(135deg, #34c759 0%, #28a745 100%)',
+                                    color: 'white', justifyContent: 'center', fontWeight: 700
+                                }}
+                                onClick={() => setShowSuccessModal(false)}
+                            >
+                                Continuar
+                            </button>
+                            <button
+                                className="action-btn"
+                                style={{
+                                    background: 'transparent',
+                                    color: 'var(--text-secondary)', justifyContent: 'center',
+                                    border: '1px solid var(--accent-light)'
+                                }}
+                                onClick={() => {
+                                    setShowSuccessModal(false);
+                                    window.location.href = '/caja';
+                                }}
+                            >
+                                Ver Detalles en Caja
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* OPEN TAB MODAL */}
+            {showOpenTabModal && (
+                <div className="pending-modal-overlay">
+                    <div className="pending-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+                        <div className="pending-modal-header" style={{ marginBottom: '1.5rem' }}>
+                            <div>
+                                <h3 className="pending-modal-title">Abrir Carta</h3>
+                                <p className="pending-modal-subtitle">Ingrese el nombre del cliente (Opcional)</p>
+                            </div>
+                            <button className="close-btn" onClick={() => setShowOpenTabModal(false)}>
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <div style={{ position: 'relative', marginBottom: '1rem' }}>
+                                <User size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+                                <input
+                                    type="text"
+                                    autoFocus
+                                    placeholder="Nombre del Cliente (Opcional)"
+                                    value={newTabName}
+                                    onChange={(e) => setNewTabName(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px 12px 12px 40px',
+                                        borderRadius: '12px',
+                                        border: '1px solid var(--accent-light)',
+                                        background: 'var(--bg-app)',
+                                        color: 'var(--text-primary)',
+                                        fontSize: '1rem',
+                                        outline: 'none'
+                                    }}
+                                />
+                            </div>
+
+                        </div>
+
+                        <div className="actions-row">
+                            <button
+                                className="action-btn"
+                                style={{ background: 'var(--bg-card-hover)', color: 'var(--text-secondary)', padding: '0.75rem', justifyContent: 'center' }}
+                                onClick={() => setShowOpenTabModal(false)}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                className="action-btn"
+                                onClick={confirmOpenTab}
+                                style={{
+                                    background: 'linear-gradient(135deg, #fb923c 0%, #f97316 100%)',
+                                    color: 'white',
+                                    border: 'none',
+                                    padding: '0.75rem',
+                                    justifyContent: 'center',
+                                    opacity: 1
+                                }}
+                            >
+                                Confirmar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )
+            }
+        </div >
+    );
+}
