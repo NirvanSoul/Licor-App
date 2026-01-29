@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useProduct } from '../../../context/ProductContext';
+import { useAuth } from '../../../context/AuthContext';
 import { ChevronUp, ChevronDown, Check, ShoppingBag, Store } from 'lucide-react';
 import ContainerSelector from '../../../components/ContainerSelector';
 import { isFuzzyMatch, getGlobalSearchScore } from '../../../utils/searchUtils';
@@ -17,8 +18,16 @@ const BeerDashboardCard = ({ beerName, searchFilter = '' }) => {
         getUnitsPerEmission
     } = useProduct();
 
+    const { role } = useAuth();
+
+    // Permission: Only Owner, Manager, or Developer can see cost prices
+    const canViewCost = role && ['OWNER', 'MANAGER', 'DEVELOPER'].includes(role);
+
     // 1. State Hooks
-    const [subtype, setSubtype] = useState('Botella');
+    const [subtype, setSubtype] = useState(() => {
+        const category = beerCategories[beerName]?.toLowerCase() || '';
+        return category.includes('lata') ? 'Lata' : 'Botella';
+    });
     const [isExpanded, setIsExpanded] = useState(false);
     const normalizedQuery = searchFilter.toLowerCase();
 
@@ -57,6 +66,12 @@ const BeerDashboardCard = ({ beerName, searchFilter = '' }) => {
         // Auto-expand ONLY if it's a strong match (Name match 80+, or Emission match 70+)
         if (searchScore >= 70) {
             setIsExpanded(true);
+        }
+
+        // SAFETY CHECK: If category data loads late, update subtype to Lata if needed
+        const category = beerCategories[beerName]?.toLowerCase() || '';
+        if (category.includes('lata') && !subtype.includes('Lata')) {
+            setSubtype('Lata');
         }
 
         if (isFuzzyMatch('lata', normalizedQuery) || normalizedQuery.includes('lata')) {
@@ -124,10 +139,18 @@ const BeerDashboardCard = ({ beerName, searchFilter = '' }) => {
                 {/* Hide selector for Tercio as requested */}
                 {beerName !== 'Tercio' && (
                     <div style={{ width: '200px' }} onClick={(e) => e.stopPropagation()}>
-                        <ContainerSelector value={subtype} onChange={(val) => {
-                            setSubtype(val);
-                            setIsExpanded(true);
-                        }} allowedType={beerCategories[beerName]} />
+                        <ContainerSelector
+                            value={subtype}
+                            onChange={(val) => {
+                                if (val === 'Lata') {
+                                    setSubtype(beerCategories[beerName] || 'Lata');
+                                } else {
+                                    setSubtype(val);
+                                }
+                                setIsExpanded(true);
+                            }}
+                            allowedType={beerCategories[beerName]}
+                        />
                     </div>
                 )}
             </div>
@@ -226,23 +249,25 @@ const BeerDashboardCard = ({ beerName, searchFilter = '' }) => {
                                             <span style={{ fontSize: '0.9rem', color: '#10B981', fontWeight: 600 }}>{formatBs(localPrice)}</span>
                                         </div>
 
-                                        {/* Cost Price (Adquisición) */}
-                                        <div style={{
-                                            background: 'rgba(16, 185, 129, 0.05)',
-                                            padding: '0.75rem',
-                                            borderRadius: '12px',
-                                            display: 'flex', flexDirection: 'column', gap: '4px',
-                                            border: '1px solid rgba(16, 185, 129, 0.1)'
-                                        }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                                                <Check size={14} color="#10b981" />
-                                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#10b981' }}>COSTO</span>
+                                        {/* Cost Price (Adquisición) - ONLY VISIBLE TO MASTERS */}
+                                        {canViewCost && (
+                                            <div style={{
+                                                background: 'rgba(16, 185, 129, 0.05)',
+                                                padding: '0.75rem',
+                                                borderRadius: '12px',
+                                                display: 'flex', flexDirection: 'column', gap: '4px',
+                                                border: '1px solid rgba(16, 185, 129, 0.1)'
+                                            }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                                                    <Check size={14} color="#10b981" />
+                                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#10b981' }}>COSTO</span>
+                                                </div>
+                                                <span style={{ fontSize: '1.25rem', fontWeight: 700, color: '#10b981' }}>
+                                                    ${getCostPrice(beerName, emission, subtype).toFixed(2)}
+                                                </span>
+                                                <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 500 }}>Precio Adquisición</span>
                                             </div>
-                                            <span style={{ fontSize: '1.25rem', fontWeight: 700, color: '#10b981' }}>
-                                                ${getCostPrice(beerName, emission, subtype).toFixed(2)}
-                                            </span>
-                                            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 500 }}>Precio Adquisición</span>
-                                        </div>
+                                        )}
                                     </div>
                                 </div>
                             );

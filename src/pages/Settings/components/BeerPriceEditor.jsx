@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useProduct } from '../../../context/ProductContext';
+import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from '../../../context/ThemeContext';
 import { useNotification } from '../../../context/NotificationContext';
 import { ChevronUp, ChevronDown, Check, ShoppingBag, Store, Save, X } from 'lucide-react';
@@ -25,18 +26,28 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
     } = useProduct();
     const { showNotification } = useNotification();
     const { theme } = useTheme();
+    const { role } = useAuth();
+
+    // Permission: Only Owner, Manager, or Developer can see cost prices
+    const canViewCost = role && ['OWNER', 'MANAGER', 'DEVELOPER'].includes(role);
 
     // Currency Mode State: 'USD' | 'BS'
     const [currencyMode, setCurrencyMode] = useState('USD');
 
     // Collapsible Logic
-    const [subtype, setSubtype] = useState('Botella');
+    const [subtype, setSubtype] = useState(beerCategories[beerName] || 'Botella');
     const [isExpanded, setIsExpanded] = useState(false);
 
     // Auto-expand if search matches
     useEffect(() => {
         if (beerName === 'Tercio') {
             setSubtype('Botella Tercio');
+        } else {
+            // Re-sync subtype with category when data loads
+            const cat = beerCategories[beerName];
+            if (cat && subtype !== cat) {
+                setSubtype(cat);
+            }
         }
 
         if (searchFilter && searchFilter.length > 1) {
@@ -44,9 +55,9 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
         } else {
             setIsExpanded(false);
         }
-    }, [searchFilter, beerName]);
+    }, [searchFilter, beerName, beerCategories]);
 
-    // Memoize calculating emissions to prevent infinite render loop
+    // Get emissions dynamic list (includes Six Pack, and custom ones)
     const emissions = React.useMemo(() => {
         const raw = getEmissionsForSubtype(subtype);
         // Sort from largest to smallest (Caja > Media Caja > Unidad, etc.)
@@ -275,7 +286,11 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
 
                         <div className="subtype-selector-container" style={{ width: '180px', display: 'flex', alignItems: 'center' }}>
                             <ContainerSelector value={subtype} onChange={(val) => {
-                                setSubtype(val);
+                                if (val === 'Lata') {
+                                    setSubtype(beerCategories[beerName] || 'Lata');
+                                } else {
+                                    setSubtype(val);
+                                }
                                 setIsExpanded(true);
                             }} allowedType={beerCategories[beerName]} />
                         </div>
@@ -396,47 +411,49 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
                                         </span>
                                     </div>
 
-                                    {/* Cost (Adquisición) */}
-                                    <div style={{
-                                        background: theme === 'dark' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(16, 185, 129, 0.04)',
-                                        padding: '0.75rem',
-                                        borderRadius: '12px',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        gap: '4px',
-                                        border: hasPendingCostPrice(beerName, emission, subtype)
-                                            ? '2px solid #10b981'
-                                            : (theme === 'dark' ? '1px solid rgba(16, 185, 129, 0.2)' : '1px solid rgba(16, 185, 129, 0.1)')
-                                    }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                                            <div style={{
-                                                width: '18px', height: '18px', borderRadius: '50%', background: '#10b981',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white'
-                                            }}>
-                                                <span style={{ fontSize: '10px', fontWeight: 900 }}>$</span>
+                                    {/* Cost (Adquisición) - ONLY VISIBLE TO MASTERS */}
+                                    {canViewCost && (
+                                        <div style={{
+                                            background: theme === 'dark' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(16, 185, 129, 0.04)',
+                                            padding: '0.75rem',
+                                            borderRadius: '12px',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: '4px',
+                                            border: hasPendingCostPrice(beerName, emission, subtype)
+                                                ? '2px solid #10b981'
+                                                : (theme === 'dark' ? '1px solid rgba(16, 185, 129, 0.2)' : '1px solid rgba(16, 185, 129, 0.1)')
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                                                <div style={{
+                                                    width: '18px', height: '18px', borderRadius: '50%', background: '#10b981',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white'
+                                                }}>
+                                                    <span style={{ fontSize: '10px', fontWeight: 900 }}>$</span>
+                                                </div>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#059669' }}>PRECIO COSTO ({currencyMode === 'USD' ? currencySymbol : 'Bs.'})</span>
                                             </div>
-                                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#059669' }}>PRECIO COSTO ({currencyMode === 'USD' ? currencySymbol : 'Bs.'})</span>
+                                            <input
+                                                type="text"
+                                                inputMode="numeric"
+                                                placeholder="0,00"
+                                                className="price-input"
+                                                value={priceMap[emission]?.cost || ''}
+                                                onChange={(e) => handleAtmInputChange(emission, 'cost', e)}
+                                                style={{
+                                                    background: 'var(--bg-input)', border: '1px solid rgba(16, 185, 129, 0.3)',
+                                                    borderRadius: '8px', padding: '10px', width: '100%', fontSize: '1.1rem',
+                                                    fontWeight: '800', color: theme === 'dark' ? '#10b981' : '#059669',
+                                                    boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)'
+                                                }}
+                                            />
+                                            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textAlign: 'right', marginTop: '2px', opacity: 0.8, fontWeight: 500 }}>
+                                                {currencyMode === 'BS'
+                                                    ? `≈ ${currencySymbol}${(parseCurrencyString(priceMap[emission]?.cost) / (currentRate || 1)).toFixed(2)}`
+                                                    : `≈ Bs. ${(parseCurrencyString(priceMap[emission]?.cost) * (currentRate || 1)).toLocaleString('es-VE', { maximumFractionDigits: 2 })}`}
+                                            </span>
                                         </div>
-                                        <input
-                                            type="text"
-                                            inputMode="numeric"
-                                            placeholder="0,00"
-                                            className="price-input"
-                                            value={priceMap[emission]?.cost || ''}
-                                            onChange={(e) => handleAtmInputChange(emission, 'cost', e)}
-                                            style={{
-                                                background: 'var(--bg-input)', border: '1px solid rgba(16, 185, 129, 0.3)',
-                                                borderRadius: '8px', padding: '10px', width: '100%', fontSize: '1.1rem',
-                                                fontWeight: '800', color: theme === 'dark' ? '#10b981' : '#059669',
-                                                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)'
-                                            }}
-                                        />
-                                        <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textAlign: 'right', marginTop: '2px', opacity: 0.8, fontWeight: 500 }}>
-                                            {currencyMode === 'BS'
-                                                ? `≈ ${currencySymbol}${(parseCurrencyString(priceMap[emission]?.cost) / (currentRate || 1)).toFixed(2)}`
-                                                : `≈ Bs. ${(parseCurrencyString(priceMap[emission]?.cost) * (currentRate || 1)).toLocaleString('es-VE', { maximumFractionDigits: 2 })}`}
-                                        </span>
-                                    </div>
+                                    )}
                                 </div>
                             </div>
                         );
