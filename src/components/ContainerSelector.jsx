@@ -106,19 +106,10 @@ export default function ContainerSelector({ value, onChange, allowedType }) {
             {/* Level 1: Main Type (Botella vs Lata) */}
             {mainOptions.length > 1 ? (
                 <SlidingSegmentedControl
-                    onSelect={(opt) => {
-                        if (opt.value === 'Botella') {
-                            onChange('Botella');
-                        } else {
-                            onChange('Lata Pequeña');
-                        }
-                    }}
+                    onSelect={(opt) => onChange(opt.value)}
                     options={mainOptions}
                 />
             ) : (
-                // Only one option allowed: show a static badge or simplified label if needed
-                // But for now, let's just not show the toggle if there's only one choice
-                // and it matches the current value.
                 <div style={{
                     background: 'var(--text-primary)',
                     color: 'var(--bg-card)',
@@ -129,22 +120,6 @@ export default function ContainerSelector({ value, onChange, allowedType }) {
                     textAlign: 'center'
                 }}>
                     {mainOptions[0].label}
-                </div>
-            )}
-
-            {/* Level 2: Sub-options (Conditional) */}
-            {isCan && (
-                <div style={{
-                    animation: 'slideUpFade 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-                    transformOrigin: 'top center'
-                }}>
-                    <SlidingSegmentedControl
-                        onSelect={(opt) => onChange(`Lata ${opt.value}`)}
-                        options={[
-                            { label: 'Pequeña', value: 'Pequeña', isActive: !isLarge },
-                            { label: 'Grande', value: 'Grande', isActive: isLarge }
-                        ]}
-                    />
                 </div>
             )}
             <style>{`

@@ -7,15 +7,17 @@ import { useTheme } from '../../context/ThemeContext';
 import BeerDashboardCard from './components/BeerDashboardCard';
 import BeerPriceEditor from './components/BeerPriceEditor';
 import PriceFab from '../../components/PriceFab';
+import ContainerSelector from '../../components/ContainerSelector';
 import { getGlobalSearchScore } from '../../utils/searchUtils';
 
 const PriceSection = ({ initialEditMode, initialSearch }) => {
-    const { beerTypes } = useProduct();
+    const { beerTypes, beerCategories } = useProduct();
     const { role } = useAuth();
     const { theme } = useTheme();
 
     const [searchQuery, setSearchQuery] = useState(initialSearch || '');
     const [isEditMode, setIsEditMode] = useState(initialEditMode || false);
+    const [globalPriceSubtype, setGlobalPriceSubtype] = useState('Botella');
 
     useEffect(() => {
         if (initialEditMode) setIsEditMode(true);
@@ -28,15 +30,35 @@ const PriceSection = ({ initialEditMode, initialSearch }) => {
     return (
         <div style={{ display: 'grid', gap: '1rem' }}>
 
-            <div className="app-search-container">
-                <Search className="app-search-icon" size={20} />
-                <input
-                    type="text"
-                    placeholder="Buscar cerveza, unidad, tipo..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="app-search-input"
-                />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div className="app-search-container" style={{ marginBottom: 0 }}>
+                    <Search className="app-search-icon" size={20} />
+                    <input
+                        type="text"
+                        placeholder="Buscar cerveza, unidad, tipo..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="app-search-input"
+                    />
+                </div>
+
+                {/* GLOBAL SUBTYPE SELECTOR (NEW STYLE) */}
+                <div style={{
+                    background: 'var(--bg-card)',
+                    padding: '1rem',
+                    borderRadius: '16px',
+                    border: '1px solid var(--accent-light)',
+                    marginBottom: '0.5rem'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>Formato a Mostrar:</span>
+                    </div>
+
+                    <ContainerSelector
+                        value={globalPriceSubtype}
+                        onChange={setGlobalPriceSubtype}
+                    />
+                </div>
             </div>
 
             {/* TOGGLE EDIT MODE BUTTON - Only visible to OWNER, MANAGER, DEVELOPER */}
@@ -65,7 +87,25 @@ const PriceSection = ({ initialEditMode, initialSearch }) => {
 
             <div style={{ display: 'grid', gap: '1rem' }}>
                 {Array.isArray(beerTypes) && [...beerTypes]
-                    .filter(beer => beer.toLowerCase() !== 'tercio')
+                    .filter(beer => {
+                        if (beer.toLowerCase() === 'tercio') return false;
+
+                        // 1. Search Query Filter
+                        const matchesSearch = !searchQuery || beer.toLowerCase().includes(searchQuery.toLowerCase());
+                        if (!matchesSearch) return false;
+
+                        // 2. Subtype Category Filter
+                        const category = (beerCategories[beer] || 'Botella').toLowerCase();
+                        const selectedSub = globalPriceSubtype.toLowerCase();
+
+                        if (selectedSub.includes('botella')) {
+                            return category.includes('botella');
+                        } else if (selectedSub.includes('lata')) {
+                            return category.includes('lata');
+                        }
+
+                        return true;
+                    })
                     .sort((a, b) => {
                         if (!searchQuery || searchQuery.length < 2) return 0;
                         const scoreA = getGlobalSearchScore(a, searchQuery);

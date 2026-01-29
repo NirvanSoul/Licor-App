@@ -33,17 +33,11 @@ export default function Register() {
         }
     }, [initialModeIsEmployee]);
 
-    // Validation State
-    const [isFormValid, setIsFormValid] = useState(false);
-
-    useEffect(() => {
-        const isCommonValid = fullName.trim().length > 0 && email.includes('@') && password.length >= 6;
-        if (isOwner) {
-            setIsFormValid(isCommonValid && liquorStoreName.trim().length > 0);
-        } else {
-            setIsFormValid(isCommonValid && orgCode.trim().length === 6);
-        }
-    }, [fullName, email, password, liquorStoreName, orgCode, isOwner]);
+    // Validation (Derived immediately for responsiveness)
+    const isCommonValid = fullName.trim().length > 0 && email.includes('@') && password.length >= 6;
+    const isFormValid = isOwner
+        ? (isCommonValid && liquorStoreName.trim().length > 0)
+        : isCommonValid; // Org Code is optional
 
     const handleRegister = async (e) => {
         e.preventDefault();
@@ -61,7 +55,7 @@ export default function Register() {
             const metadata = {
                 full_name: fullName,
                 liquor_store_name: isOwner ? liquorStoreName : null,
-                org_code: !isOwner ? orgCode.toUpperCase() : null // Send Clean Code
+                org_code: (!isOwner && orgCode.trim().length > 0) ? orgCode.toUpperCase() : null
             };
 
             console.log('Enviando registro a Supabase:', metadata);
@@ -255,8 +249,8 @@ export default function Register() {
 
                             {/* 2. Helper Text */}
                             <div style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                                Pídelo a tu empleador, <br />
-                                en el boton de usuarios en el menu de ajustes <br /> (Ej: K8X29L)
+                                Pídelo a tu empleador (Opcional). <br />
+                                Puedes ingresar sin código y unirte después.
                             </div>
 
                             {/* 3. Input Bar */}
@@ -265,7 +259,7 @@ export default function Register() {
                                 placeholder="------"
                                 value={orgCode}
                                 onChange={(e) => setOrgCode(e.target.value.toUpperCase())}
-                                required={!isOwner}
+                                required={false}
                                 maxLength={6}
                                 className="ticket-input-large"
                                 style={{

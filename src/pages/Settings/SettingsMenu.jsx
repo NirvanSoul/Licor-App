@@ -118,14 +118,14 @@ const SettingsMenu = ({ setCurrentView }) => {
             {role && ['OWNER', 'MANAGER', 'DEVELOPER'].includes(role) && (
                 <>
                     <MenuOption item={{ id: 'products', label: 'Gestion de Productos', icon: Package, color: '#4ade80' }} />
-                    <MenuOption item={{ id: 'dashboard', label: 'Precios Actuales', icon: Star, color: '#3b82f6' }} />
+                    <MenuOption item={{ id: 'dashboard', label: 'Precios', icon: Star, color: '#3b82f6' }} />
                     <MenuOption item={{ id: 'inventory', label: 'Inventario', icon: Box, color: '#a3e635' }} />
                 </>
             )}
 
             {/* Employees only see Prices (read-only, enforced in PriceSection) */}
             {role && role === 'EMPLOYEE' && (
-                <MenuOption item={{ id: 'dashboard', label: 'Precios Actuales', icon: Star, color: '#3b82f6' }} />
+                <MenuOption item={{ id: 'dashboard', label: 'Precios', icon: Star, color: '#3b82f6' }} />
             )}
 
             {/* --- GENERAL --- */}

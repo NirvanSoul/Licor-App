@@ -181,9 +181,26 @@ const BeerPriceEditor = ({ beerName, searchFilter = '' }) => {
                     marginBottom: isExpanded ? '1.5rem' : '0'
                 }}
             >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
                     {isExpanded ? <ChevronUp size={20} color="var(--text-secondary)" /> : <ChevronDown size={20} color="var(--text-secondary)" />}
                     <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>{beerName}</h3>
+
+                    {/* Product Subtype Badge */}
+                    {beerCategories[beerName]?.toLowerCase().includes('lata') && (
+                        <span style={{
+                            fontSize: '0.65rem',
+                            padding: '2px 8px',
+                            borderRadius: '6px',
+                            background: beerCategories[beerName].toLowerCase().includes('grande') ? 'rgba(249, 115, 22, 0.15)' : 'rgba(251, 146, 60, 0.12)',
+                            color: beerCategories[beerName].toLowerCase().includes('grande') ? '#F97316' : '#FB923C',
+                            border: `1px solid ${beerCategories[beerName].toLowerCase().includes('grande') ? 'rgba(249, 115, 22, 0.3)' : 'rgba(251, 146, 60, 0.2)'}`,
+                            fontWeight: 700,
+                            whiteSpace: 'nowrap',
+                            marginLeft: '4px'
+                        }}>
+                            {beerCategories[beerName].toLowerCase().includes('grande') ? 'Lata Grande' : 'Lata Pequeña'}
+                        </span>
+                    )}
                 </div>
 
                 {beerName !== 'Tercio' && (

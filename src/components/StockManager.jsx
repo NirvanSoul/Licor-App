@@ -4,6 +4,7 @@ import { useProduct } from '../context/ProductContext';
 import { useOrder } from '../context/OrderContext';
 import { Minus, Plus, Box, Package, ChevronDown, ChevronUp, Layers, Trash2, AlertTriangle, Check, Search } from 'lucide-react';
 import ContainerSelector from './ContainerSelector';
+import { getGlobalSearchScore } from '../utils/searchUtils';
 
 // --- REAL TIME STOCK CALCULATION HELPER ---
 const getReservedQuantity = (pendingOrders, getUnitsPerEmission, beer, subtype) => {
@@ -228,8 +229,30 @@ export default function StockManager({ initialSearch }) {
     const [historyOpen, setHistoryOpen] = useState(false);
     const [wasteSectionOpen, setWasteSectionOpen] = useState(false);
     const [expandedSections, setExpandedSections] = useState({});
-    const [beerSubtypes, setBeerSubtypes] = useState({});
+    const [globalStockSubtype, setGlobalStockSubtype] = useState('Botella');
     const [searchQuery, setSearchQuery] = useState(initialSearch || '');
+
+    // Auto-expand search results
+    useEffect(() => {
+        if (!searchQuery || searchQuery.length < 2) {
+            // Optional: You could collapse everything here, but usually it's better 
+            // to keep the manual toggles. However, for a "clean" feel, let's only 
+            // expand when there's an active search.
+            return;
+        }
+
+        const newExpanded = {};
+        beerTypes.forEach(beer => {
+            const score = getGlobalSearchScore(beer, searchQuery);
+            if (score >= 80) {
+                newExpanded[beer] = true;
+            }
+        });
+
+        if (Object.keys(newExpanded).length > 0) {
+            setExpandedSections(prev => ({ ...prev, ...newExpanded }));
+        }
+    }, [searchQuery, beerTypes]);
 
     // Auto-expand and search on initial guide
     useEffect(() => {
@@ -238,11 +261,9 @@ export default function StockManager({ initialSearch }) {
             setExpandedSections(prev => ({ ...prev, [initialSearch]: true }));
 
             // Set subtype if needed
-            if (!beerSubtypes[initialSearch]) {
-                const category = beerCategories[initialSearch] || 'Botella';
-                const defaultSub = category.toLowerCase().includes('lata') ? 'Lata Pequeña' : 'Botella';
-                setBeerSubtypes(prev => ({ ...prev, [initialSearch]: defaultSub }));
-            }
+            const category = beerCategories[initialSearch] || 'Botella';
+            const defaultSub = category.toLowerCase().includes('lata') ? 'Lata Pequeña' : 'Botella';
+            setGlobalStockSubtype(defaultSub);
         }
     }, [initialSearch, beerCategories]);
 
@@ -261,15 +282,10 @@ export default function StockManager({ initialSearch }) {
 
     const toggleSection = (beer) => {
         setExpandedSections(prev => ({ ...prev, [beer]: !prev[beer] }));
-        if (!beerSubtypes[beer]) {
-            const category = beerCategories[beer] || 'Botella';
-            const defaultSub = category.toLowerCase().includes('lata') ? 'Lata Pequeña' : 'Botella';
-            setBeerSubtypes(prev => ({ ...prev, [beer]: defaultSub }));
-        }
     };
 
-    const handleSubtypeChange = (beer, subtype) => {
-        setBeerSubtypes(prev => ({ ...prev, [beer]: subtype }));
+    const handleGlobalSubtypeChange = (subtype) => {
+        setGlobalStockSubtype(subtype);
     };
 
     // Merge History for the big modal
@@ -306,7 +322,7 @@ export default function StockManager({ initialSearch }) {
                 </div>
 
                 {/* Search Bar */}
-                <div className="app-search-container" style={{ marginBottom: '1rem' }}>
+                <div className="app-search-container" style={{ marginBottom: '1.5rem' }}>
                     <Search className="app-search-icon" size={20} />
                     <input
                         type="text"
@@ -316,18 +332,69 @@ export default function StockManager({ initialSearch }) {
                         className="app-search-input"
                     />
                 </div>
+
+                {/* GLOBAL SUBTYPE SELECTOR (NEW) */}
+                <div style={{
+                    background: 'var(--bg-card)',
+                    padding: '1rem',
+                    borderRadius: '16px',
+                    border: '1px solid var(--accent-light)',
+                    marginBottom: '1rem'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>Formato a Cargar:</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: globalStockSubtype === 'Botella Tercio' ? '#34C759' : 'var(--text-secondary)' }}>Tercio (24 Uds)</span>
+                            <div
+                                onClick={() => setGlobalStockSubtype(globalStockSubtype === 'Botella Tercio' ? 'Botella' : 'Botella Tercio')}
+                                style={{ width: '38px', height: '20px', background: globalStockSubtype === 'Botella Tercio' ? '#34C759' : '#ccc', borderRadius: '15px', position: 'relative', cursor: 'pointer', transition: 'all 0.3s' }}
+                            >
+                                <div style={{ width: '16px', height: '16px', background: 'white', borderRadius: '50%', position: 'absolute', top: '2px', left: globalStockSubtype === 'Botella Tercio' ? '20px' : '2px', transition: 'all 0.3s', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }} />
+                            </div>
+                        </div>
+                    </div>
+
+                    {globalStockSubtype !== 'Botella Tercio' && (
+                        <ContainerSelector
+                            value={globalStockSubtype}
+                            onChange={(val) => setGlobalStockSubtype(val)}
+                        />
+                    )}
+                </div>
             </div>
 
             <div className="stock-grid" style={{ display: 'grid', gap: '1rem' }}>
                 {Array.isArray(beerTypes) && beerTypes
                     .filter(beer => {
-                        if (!searchQuery) return true;
-                        return beer.toLowerCase().includes(searchQuery.toLowerCase());
+                        // 1. Search Query Filter
+                        const matchesSearch = !searchQuery || beer.toLowerCase().includes(searchQuery.toLowerCase());
+                        if (!matchesSearch) return false;
+
+                        // 2. Subtype Category Filter
+                        const category = (beerCategories[beer] || 'Botella').toLowerCase();
+                        const selectedSub = globalStockSubtype.toLowerCase();
+
+                        // Logic: If selected is "Botella..." -> show beers with "botella" category
+                        // If selected is "Lata..." -> show beers with "lata" category
+                        if (selectedSub.includes('botella')) {
+                            return category.includes('botella');
+                        } else if (selectedSub.includes('lata')) {
+                            return category.includes('lata');
+                        }
+
+                        return true;
                     })
                     .map(beer => {
                         const isExpanded = expandedSections[beer];
                         const hasPending = pendingInventory && Object.keys(pendingInventory).some(k => k.startsWith(beer + '_'));
-                        const activeSubtype = beerSubtypes[beer] || 'Botella';
+
+                        // Use the product's actual category if it matches the current global filter type
+                        const productCategory = beerCategories[beer] || 'Botella';
+                        const activeSubtype = (globalStockSubtype === 'Lata' && productCategory.includes('Lata'))
+                            ? productCategory
+                            : (globalStockSubtype === 'Botella' && productCategory.includes('Botella'))
+                                ? productCategory
+                                : globalStockSubtype;
 
                         return (
                             <div key={beer} className="beer-stock-card" style={{
@@ -350,8 +417,25 @@ export default function StockManager({ initialSearch }) {
                                         cursor: 'pointer'
                                     }}
                                 >
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
                                         {beer}
+
+                                        {/* Product Subtype Badge */}
+                                        {productCategory.toLowerCase().includes('lata') && (
+                                            <span style={{
+                                                fontSize: '0.65rem',
+                                                padding: '2px 8px',
+                                                borderRadius: '6px',
+                                                background: productCategory.toLowerCase().includes('grande') ? 'rgba(249, 115, 22, 0.15)' : 'rgba(251, 146, 60, 0.12)',
+                                                color: productCategory.toLowerCase().includes('grande') ? '#F97316' : '#FB923C',
+                                                border: `1px solid ${productCategory.toLowerCase().includes('grande') ? 'rgba(249, 115, 22, 0.3)' : 'rgba(251, 146, 60, 0.2)'}`,
+                                                fontWeight: 700,
+                                                whiteSpace: 'nowrap'
+                                            }}>
+                                                {productCategory.toLowerCase().includes('grande') ? 'Lata Grande' : 'Lata Pequeña'}
+                                            </span>
+                                        )}
+
                                         {hasPending && !isExpanded && (
                                             <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#F59E0B' }} />
                                         )}
@@ -361,34 +445,6 @@ export default function StockManager({ initialSearch }) {
 
                                 {isExpanded && (
                                     <div style={{ padding: '1rem ' }}>
-                                        <div style={{ marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-card-hover)', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid var(--accent-light)' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                    <Check size={18} color={activeSubtype === 'Botella Tercio' ? '#34C759' : 'var(--text-secondary)'} />
-                                                    <div>
-                                                        <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>Formato Tercio</div>
-                                                        <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>Ajuste para cajas de 24</div>
-                                                    </div>
-                                                </div>
-                                                <div
-                                                    onClick={() => handleSubtypeChange(beer, activeSubtype === 'Botella Tercio' ? 'Botella' : 'Botella Tercio')}
-                                                    style={{ width: '38px', height: '20px', background: activeSubtype === 'Botella Tercio' ? '#34C759' : '#ccc', borderRadius: '15px', position: 'relative', cursor: 'pointer', transition: 'all 0.3s' }}
-                                                >
-                                                    <div style={{ width: '16px', height: '16px', background: 'white', borderRadius: '50%', position: 'absolute', top: '2px', left: activeSubtype === 'Botella Tercio' ? '20px' : '2px', transition: 'all 0.3s', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }} />
-                                                </div>
-                                            </div>
-
-                                            {activeSubtype !== 'Botella Tercio' && (
-                                                <>
-                                                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 500 }}>Configurar para:</label>
-                                                    <ContainerSelector
-                                                        value={activeSubtype}
-                                                        onChange={(val) => handleSubtypeChange(beer, val)}
-                                                        allowedType={beerCategories[beer]}
-                                                    />
-                                                </>
-                                            )}
-                                        </div>
                                         <div>
                                             {['Caja', 'Unidad'].map(emission => (
                                                 <StockRow

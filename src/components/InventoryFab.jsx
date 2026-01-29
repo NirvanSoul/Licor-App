@@ -78,8 +78,15 @@ export default function InventoryFab() {
                 const emission = parts.pop();
                 const subtype = parts.pop();
                 const beer = parts.join('_');
-                const currentCost = getCostPrice(beer, emission, subtype);
-                initialCosts[key] = currentCost || 0;
+
+                // 1. Initialize the cost for the added emission
+                initialCosts[key] = getCostPrice(beer, emission, subtype) || 0;
+
+                // 2. Also initialize Box cost to ensure we have a primary input for grouping
+                const primaryKey = `${beer}_Caja_${subtype}`;
+                if (initialCosts[primaryKey] === undefined) {
+                    initialCosts[primaryKey] = getCostPrice(beer, 'Caja', subtype) || 0;
+                }
             }
         });
         setCostInputs(initialCosts);
@@ -117,8 +124,27 @@ export default function InventoryFab() {
     }
 
     // Auto-focus helper for inputs?
-    const handleCostChange = (key, val) => {
-        setCostInputs(prev => ({ ...prev, [key]: val }));
+    // Proportional cost change helper
+    const handleCostChange = (beer, subtype, primaryEmission, newVal) => {
+        const primaryUnits = getUnitsPerEmission(primaryEmission, subtype);
+        const primaryKey = `${beer}_${primaryEmission}_${subtype}`;
+
+        setCostInputs(prev => {
+            const next = { ...prev };
+            // Ensure primary key is updated/added
+            next[primaryKey] = newVal;
+
+            // Update all OTHER related keys in costInputs (the ones actually added)
+            Object.keys(next).forEach(key => {
+                if (key.startsWith(`${beer}_${subtype}_`) && key !== primaryKey) {
+                    const parts = key.split('_');
+                    const em = parts.pop();
+                    const units = getUnitsPerEmission(em, subtype);
+                    next[key] = newVal * (units / primaryUnits);
+                }
+            });
+            return next;
+        });
     };
 
     const handleClose = () => {
@@ -211,61 +237,89 @@ export default function InventoryFab() {
                         </div>
 
                         <div className="custom-scrollbar" style={{ overflowY: 'auto', flex: 1, marginBottom: '1.5rem', paddingRight: '4px' }}>
-                            {Object.entries(pendingInventory).filter(([_, qty]) => qty > 0).map(([key, qty]) => {
-                                const parts = key.split('_');
-                                const emission = parts.pop();
-                                const subtype = parts.pop();
-                                const beer = parts.join('_');
-                                const totalCost = (costInputs[key] || 0) * qty;
+                            {(() => {
+                                // Group added items by beer and subtype
+                                const groups = Object.entries(pendingInventory)
+                                    .filter(([_, qty]) => qty > 0)
+                                    .reduce((acc, [key, qty]) => {
+                                        const parts = key.split('_');
+                                        const em = parts.pop();
+                                        const sub = parts.pop();
+                                        const b = parts.join('_');
+                                        const gKey = `${b}_${sub}`;
+                                        if (!acc[gKey]) acc[gKey] = { beer: b, subtype: sub, items: [] };
+                                        acc[gKey].items.push({ key, emission: em, qty });
+                                        return acc;
+                                    }, {});
 
-                                return (
-                                    <div key={key} style={{
-                                        display: 'flex', flexDirection: 'column', gap: '8px',
-                                        background: 'var(--bg-input)', padding: '12px', borderRadius: '16px', marginBottom: '10px',
-                                        border: '1px solid var(--border-color)'
-                                    }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <div>
-                                                <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{beer}</div>
-                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{qty} {emission} ({subtype})</div>
+                                return Object.values(groups).map((group) => {
+                                    // 1. Determine Primary Emission (Display target)
+                                    // User requested to prioritize 'Caja' to avoid saturation.
+                                    const primaryEmission = 'Caja';
+                                    const primaryKey = `${group.beer}_${primaryEmission}_${group.subtype}`;
+                                    // Current cost for the primary emission (either from state or derived from DB)
+                                    const currentCostVal = costInputs[primaryKey] !== undefined
+                                        ? costInputs[primaryKey]
+                                        : getCostPrice(group.beer, primaryEmission, group.subtype);
+
+                                    // Total investment for just this product group
+                                    const totalGroupInvestment = group.items.reduce((sum, item) => {
+                                        // We trust costInputs for items that are added (initialized in handleConfirm)
+                                        const unitCost = costInputs[item.key] || 0;
+                                        return sum + (unitCost * item.qty);
+                                    }, 0);
+
+                                    return (
+                                        <div key={`${group.beer}_${group.subtype}`} style={{
+                                            display: 'flex', flexDirection: 'column', gap: '8px',
+                                            background: 'var(--bg-input)', padding: '12px', borderRadius: '16px', marginBottom: '10px',
+                                            border: '1px solid var(--border-color)'
+                                        }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <div>
+                                                    <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{group.beer}</div>
+                                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                                        <span style={{ fontWeight: 600 }}>({group.subtype})</span>
+                                                        <span>&bull;</span>
+                                                        <span>Agregando: {group.items.map(i => `${i.qty} ${i.emission}`).join(' + ')}</span>
+                                                    </div>
+                                                </div>
+                                                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                                                    Subtotal: ${totalGroupInvestment.toFixed(2)}
+                                                </div>
                                             </div>
-                                            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                                                Total: ${totalCost.toFixed(2)}
+
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
+                                                <div style={{ flex: 1, position: 'relative' }}>
+                                                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', fontWeight: 600 }}>$</span>
+                                                    <input
+                                                        type="text"
+                                                        inputMode="numeric"
+                                                        value={currentCostVal.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        onChange={(e) => {
+                                                            const rawValue = e.target.value;
+                                                            const digits = rawValue.replace(/\D/g, '');
+                                                            const totalCents = parseInt(digits, 10) || 0;
+                                                            const realValue = totalCents / 100;
+                                                            handleCostChange(group.beer, group.subtype, primaryEmission, realValue);
+                                                        }}
+                                                        placeholder="0,00"
+                                                        style={{
+                                                            width: '100%', padding: '10px 10px 10px 24px', borderRadius: '10px',
+                                                            border: '1px solid var(--border-color)', outline: 'none',
+                                                            background: 'var(--bg-card)', color: 'var(--text-primary)',
+                                                            fontWeight: 700, fontSize: '1rem'
+                                                        }}
+                                                    />
+                                                </div>
+                                                <div style={{ fontSize: '0.8rem', whiteSpace: 'nowrap', opacity: 0.8, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                                                    / {primaryEmission}
+                                                </div>
                                             </div>
                                         </div>
-
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                            <div style={{ flex: 1, position: 'relative' }}>
-                                                <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', fontWeight: 600 }}>$</span>
-                                                <input
-                                                    type="text"
-                                                    inputMode="numeric"
-                                                    value={costInputs[key] !== undefined
-                                                        ? costInputs[key].toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                                                        : '0,00'}
-                                                    onChange={(e) => {
-                                                        const rawValue = e.target.value;
-                                                        const digits = rawValue.replace(/\D/g, '');
-                                                        const totalCents = parseInt(digits, 10) || 0;
-                                                        const realValue = totalCents / 100;
-                                                        handleCostChange(key, realValue);
-                                                    }}
-                                                    placeholder="0,00"
-                                                    style={{
-                                                        width: '100%', padding: '10px 10px 10px 24px', borderRadius: '10px',
-                                                        border: '1px solid var(--border-color)', outline: 'none',
-                                                        background: 'var(--bg-card)', color: 'var(--text-primary)',
-                                                        fontWeight: 700, fontSize: '1rem'
-                                                    }}
-                                                />
-                                            </div>
-                                            <div style={{ fontSize: '0.8rem', whiteSpace: 'nowrap', opacity: 0.6 }}>
-                                                / {emission.toLowerCase().replace('unidades', 'ud')}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )
-                            })}
+                                    );
+                                });
+                            })()}
                         </div>
 
                         {/* Resumen de Inversión Total */}

@@ -54,7 +54,7 @@ const Settings = () => {
         switch (currentView) {
             case 'bcv': return 'Tasas ';
             case 'products': return 'Gestion de Productos';
-            case 'dashboard': return 'Precios Actuales';
+            case 'dashboard': return 'Precios';
             case 'users': return 'Usuarios';
             case 'inventory': return 'Inventario';
             case 'activation': return 'Activación de Licencia';
