@@ -542,42 +542,79 @@ export const ProductProvider = ({ children }) => {
 
     const getCostPrice = (beer, emission, subtype) => {
         // Goal: Return the TOTAL COST for the requested emission quantity.
-        // Example: If I sell a "Caja" (36 units), and I only have a stored cost for "Unidad" ($0.5), return 36 * 0.5 = $18.
-        // If I sell "Media Caja" (18 units) and have cost for "Caja" ($36 for 36 units), return $18.
+        // Robustness: Handle trimming and case-insensitive lookups if strict fail.
 
-        const targetUnits = getUnitsPerEmission(emission, subtype);
+        const sanitize = (str) => (str || '').toString().trim();
+        const b = sanitize(beer);
+        const e = sanitize(emission) || 'Unidad';
+        const s = sanitize(subtype) || 'Botella';
 
-        // 1. Try exact match first
-        const key = `${beer}_${emission}_${subtype}`;
-        if (costPrices[key] && costPrices[key] > 0) {
-            return costPrices[key];
+        const targetUnits = getUnitsPerEmission(e, s);
+
+        // --- Helper: Robust Lookup in costPrices ---
+        const findCostInMap = (qBeer, qEmission, qSubtype) => {
+            // 1. Strict Match (Fastest)
+            const strictKey = `${qBeer}_${qEmission}_${qSubtype}`;
+            if (costPrices[strictKey] > 0) return costPrices[strictKey];
+
+            // 2. Case Insensitive Loop (Slower but safer)
+            const qB = qBeer.toLowerCase();
+            const qE = qEmission.toLowerCase();
+            const qS = qSubtype.toLowerCase();
+
+            const foundKey = Object.keys(costPrices).find(k => {
+                const parts = k.split('_');
+                // Ensure we have at least 3 parts. 
+                // Product Name might contain underscores, so we take last 2 as emission/subtype.
+                if (parts.length < 3) return false;
+
+                const kS = parts.pop();
+                const kE = parts.pop();
+                const kB = parts.join('_'); // Rejoin the rest as product name
+
+                return kB.toLowerCase() === qB &&
+                    kE.toLowerCase() === qE &&
+                    kS.toLowerCase() === qS;
+            });
+
+            if (foundKey && costPrices[foundKey] > 0) return costPrices[foundKey];
+            return 0;
+        };
+
+        // 1. Direct Lookup
+        const directCost = findCostInMap(b, e, s);
+        if (directCost > 0) return directCost;
+
+        // 2. Derive from 'Caja' (Common Source of Truth)
+        if (e !== 'Caja') {
+            const cajaCost = findCostInMap(b, 'Caja', s);
+            if (cajaCost > 0) {
+                const unitsInCaja = getUnitsPerEmission('Caja', s);
+                // Validate to avoid division by zero
+                if (unitsInCaja > 0) {
+                    return (cajaCost / unitsInCaja) * targetUnits;
+                }
+            }
         }
 
-        // 2. Prioritize 'Caja' as the source of truth for cost derivation
-        // Many users only set the cost of the 'Caja'.
-        const cajaKey = `${beer}_Caja_${subtype}`;
-        const cajaCost = costPrices[cajaKey];
-
-
-
-        if (cajaCost && cajaCost > 0) {
-            const unitsInCaja = getUnitsPerEmission('Caja', subtype);
-            const unitCost = cajaCost / unitsInCaja;
-            return unitCost * targetUnits;
-        }
-
-        // 3. Try other emissions
+        // 3. Try other emissions to derive cost
         const emissionsToCheck = ['Media Caja', 'Six Pack', 'Unidad', 'Pack', 'Bulto'];
-
         for (const em of emissionsToCheck) {
-            if (em === 'Caja') continue; // Already checked
+            if (em === e || em === 'Caja') continue; // Skip self and already checked Caja
 
-            const checkKey = `${beer}_${em}_${subtype}`;
-            const storedCost = costPrices[checkKey];
+            const otherCost = findCostInMap(b, em, s);
+            if (otherCost > 0) {
+                const unitsInOther = getUnitsPerEmission(em, s);
+                if (unitsInOther > 0) {
+                    return (otherCost / unitsInOther) * targetUnits;
+                }
+            }
+        }
 
-            if (storedCost && storedCost > 0) {
-                const storedUnits = getUnitsPerEmission(em, subtype);
-                const unitCost = storedCost / storedUnits;
+        // 4. Last Resort: Try 'Unidad' specifically (common fallback)
+        if (e !== 'Unidad') {
+            const unitCost = findCostInMap(b, 'Unidad', s);
+            if (unitCost > 0) {
                 return unitCost * targetUnits;
             }
         }
@@ -587,17 +624,43 @@ export const ProductProvider = ({ children }) => {
 
     // Helper to get the best "Unit Cost" for calculations (Inventory Valuation)
     const getBestUnitCost = (beer, subtype) => {
+        const sanitize = (str) => (str || '').toString().trim();
+        const b = sanitize(beer);
+        const s = sanitize(subtype) || 'Botella';
+
+        // --- Helper: Robust Lookup (Same as above, localized) ---
+        const findCostInMap = (qBeer, qEmission, qSubtype) => {
+            const strictKey = `${qBeer}_${qEmission}_${qSubtype}`;
+            if (costPrices[strictKey] > 0) return costPrices[strictKey];
+
+            const qB = qBeer.toLowerCase();
+            const qE = qEmission.toLowerCase();
+            const qS = qSubtype.toLowerCase();
+
+            const foundKey = Object.keys(costPrices).find(k => {
+                const parts = k.split('_');
+                if (parts.length < 3) return false;
+                const kS = parts.pop();
+                const kE = parts.pop();
+                const kB = parts.join('_');
+                return kB.toLowerCase() === qB && kE.toLowerCase() === qE && kS.toLowerCase() === qS;
+            });
+
+            if (foundKey && costPrices[foundKey] > 0) return costPrices[foundKey];
+            return 0;
+        };
+
         const emissionsToCheck = ['Caja', 'Media Caja', 'Six Pack', 'Unidad', 'Pack', 'Bulto'];
 
         for (const em of emissionsToCheck) {
-            const checkKey = `${beer}_${em}_${subtype}`;
-            const cost = costPrices[checkKey];
+            const cost = findCostInMap(b, em, s);
             if (cost > 0) {
-                const units = getUnitsPerEmission(em, subtype);
-                return cost / units;
+                const units = getUnitsPerEmission(em, s);
+                if (units > 0) return cost / units;
             }
         }
         return 0;
+
     };
 
     const getInventoryAssetValue = () => {

@@ -226,9 +226,9 @@ export function useCashAnalytics({ pendingOrders, getPrice, getUnitsPerEmission,
                             if (!item) return;
 
                             // Robust property access
-                            const name = item.beerType || item.product_name || item.name;
-                            const emission = item.emission || 'Unidad';
-                            const subtype = item.subtype || 'Botella';
+                            const name = (item.beerType || item.product_name || item.name || '').trim();
+                            const emission = (item.emission || 'Unidad').trim();
+                            const subtype = (item.subtype || 'Botella').trim();
                             const qty = Number(item.quantity) || 1;
 
                             if (!name) return;
