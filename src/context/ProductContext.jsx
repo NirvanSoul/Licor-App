@@ -55,6 +55,21 @@ export const ProductProvider = ({ children }) => {
 
     const currencySymbol = getCurrencySymbol(mainCurrency);
 
+    // --- HELPER: Subtype Resolution ---
+    const resolveSubtype = (beer, subtype) => {
+        // If strictly exists, use it
+        const strictKey = `${beer}_${subtype}`;
+        if (inventory[strictKey] !== undefined) return subtype;
+
+        // Fallback: Lata -> Lata Pequeña
+        if (subtype === 'Lata') {
+            const smallKey = `${beer}_Lata Pequeña`;
+            // If small key exists, or if we are just resolving for a "best guess" default
+            return 'Lata Pequeña';
+        }
+        return subtype;
+    };
+
     // --- MOCK DATA SYNC ---
     useEffect(() => {
         if (!organizationId) {
@@ -575,7 +590,7 @@ export const ProductProvider = ({ children }) => {
         const sanitize = (str) => (str || '').toString().trim();
         const b = sanitize(beer);
         const e = sanitize(emission) || 'Unidad';
-        const s = sanitize(subtype) || 'Botella';
+        const s = resolveSubtype(b, sanitize(subtype) || 'Botella');
 
         const targetUnits = getUnitsPerEmission(e, s);
 
@@ -749,15 +764,16 @@ export const ProductProvider = ({ children }) => {
     };
 
     const getPrice = React.useCallback((beer, emission, subtype, mode = 'standard') => {
+        const targetSubtype = resolveSubtype(beer, subtype);
         const suffix = mode === 'local' ? '_local' : '';
-        const key = `${beer}_${emission}_${subtype}${suffix}`;
+        const key = `${beer}_${emission}_${targetSubtype}${suffix}`;
         let price = prices[key];
         if (mode === 'local' && (price === undefined || price === null)) {
-            const standardKey = `${beer}_${emission}_${subtype}`;
+            const standardKey = `${beer}_${emission}_${targetSubtype}`;
             price = prices[standardKey];
         }
         return price || 0;
-    }, [prices]);
+    }, [prices, inventory]); // Added inventory to dependency since resolveSubtype uses it
 
     const updateConversion = async (emission, units, subtype) => {
         const key = `${emission}_${subtype}`;
@@ -968,6 +984,10 @@ export const ProductProvider = ({ children }) => {
 
     const currentRate = mainCurrency === 'USD' ? (exchangeRates.bcv || 0) : (mainCurrency === 'EUR' ? (exchangeRates.euro || 0) : (exchangeRates.custom || 0));
 
+    // --- HELPER: Subtype Resolution ---
+    // Moved to top of component
+
+
     const getBsPrice = (beer, emission, subtype, mode = 'standard') => {
         const basePrice = getPrice(beer, emission, subtype, mode);
         return basePrice * currentRate;
@@ -975,50 +995,69 @@ export const ProductProvider = ({ children }) => {
 
     // --- INVENTORY MANAGEMENT ---
     const addStock = async (beer, emission, subtype, quantity) => {
-        const units = quantity * getUnitsPerEmission(emission, subtype);
-        const key = `${beer}_${subtype}`;
+        // Resolve subtype (e.g. Lata -> Lata Pequeña) to ensure we add to the correct bucket
+        const targetSubtype = resolveSubtype(beer, subtype);
+
+        const units = quantity * getUnitsPerEmission(emission, targetSubtype);
+        const key = `${beer}_${targetSubtype}`;
         const newTotal = (inventory[key] || 0) + units;
         setInventory(prev => ({ ...prev, [key]: newTotal }));
 
         const productId = productMap[beer];
         if (productId && organizationId) {
-            await upsertInventory({ organization_id: organizationId, product_id: productId, subtype, quantity: newTotal });
+            await upsertInventory({ organization_id: organizationId, product_id: productId, subtype: targetSubtype, quantity: newTotal });
         }
     };
 
     const deductStock = async (beer, emission, subtype, quantity) => {
-        const units = quantity * getUnitsPerEmission(emission, subtype);
-        const key = `${beer}_${subtype}`;
+        const targetSubtype = resolveSubtype(beer, subtype);
+
+        const units = quantity * getUnitsPerEmission(emission, targetSubtype);
+        const key = `${beer}_${targetSubtype}`;
         const newTotal = Math.max(0, (inventory[key] || 0) - units);
         setInventory(prev => ({ ...prev, [key]: newTotal }));
 
         const productId = productMap[beer];
         if (productId && organizationId) {
-            await upsertInventory({ organization_id: organizationId, product_id: productId, subtype, quantity: newTotal });
+            await upsertInventory({ organization_id: organizationId, product_id: productId, subtype: targetSubtype, quantity: newTotal });
         }
     };
 
     const setBaseStock = async (beer, subtype, units) => {
-        const key = `${beer}_${subtype}`;
+        const targetSubtype = resolveSubtype(beer, subtype);
+        const key = `${beer}_${targetSubtype}`;
         setInventory(prev => ({ ...prev, [key]: units }));
 
         const productId = productMap[beer];
         if (productId && organizationId) {
-            await upsertInventory({ organization_id: organizationId, product_id: productId, subtype, quantity: units });
+            await upsertInventory({ organization_id: organizationId, product_id: productId, subtype: targetSubtype, quantity: units });
         }
     };
 
     const checkStock = (beer, emission, subtype, quantity) => {
-        const key = `${beer}_${subtype}`;
-        const required = quantity * getUnitsPerEmission(emission, subtype);
+        const targetSubtype = resolveSubtype(beer, subtype);
+        const key = `${beer}_${targetSubtype}`;
+        const required = quantity * getUnitsPerEmission(emission, targetSubtype);
         return (inventory[key] || 0) >= required;
     };
 
-    const getInventory = (beer, subtype) => inventory[`${beer}_${subtype}`] || 0;
+    const getInventory = (beer, subtype) => {
+        const targetSubtype = resolveSubtype(beer, subtype);
+        return inventory[`${beer}_${targetSubtype}`] || 0;
+    };
 
     const checkAggregateStock = (emission, subtype, requiredQuantity) => {
-        const totalAvailable = beerTypes.reduce((acc, beer) => acc + (inventory[`${beer}_${subtype}`] || 0), 0);
-        const requiredUnits = requiredQuantity * getUnitsPerEmission(emission, subtype);
+        // For aggregate, we might need to be careful. 
+        // If we want to check "Lata Pequeña" across all beers?
+        // Let's assume subtype passed here is the target subtype (e.g. from UI selector).
+        // If UI passes 'Lata', we should probably check 'Lata Pequeña' too?
+        const targetSubtype = (subtype === 'Lata') ? 'Lata Pequeña' : subtype;
+
+        const totalAvailable = beerTypes.reduce((acc, beer) => {
+            // Use getInventory to leverage resolution logic
+            return acc + (getInventory(beer, targetSubtype));
+        }, 0);
+        const requiredUnits = requiredQuantity * getUnitsPerEmission(emission, targetSubtype);
         return totalAvailable >= requiredUnits;
     };
 

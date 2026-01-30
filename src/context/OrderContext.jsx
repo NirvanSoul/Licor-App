@@ -11,7 +11,7 @@ export const useOrder = () => useContext(OrderContext);
 
 export const OrderProvider = ({ children }) => {
     const { user, organizationId } = useAuth();
-    const { productMap, checkStock, deductStock, addStock, getBsPrice, getPrice, getUnitsPerEmission, emissionOptions } = useProduct();
+    const { productMap, checkStock, deductStock, addStock, getBsPrice, getPrice, getUnitsPerEmission, emissionOptions, beerCategories } = useProduct();
     const { showNotification } = useNotification();
 
     const [pendingOrders, setPendingOrders] = useState([]);
@@ -735,38 +735,79 @@ export const OrderProvider = ({ children }) => {
         const item = order.items[itemIndex];
         const oldContent = item.slots ? item.slots[slotIndex] : null;
 
+        // Clone item to avoid mutation issues before updates
+        let currentItem = { ...item };
+        let currentSubtype = currentItem.subtype;
+
+        // AUTO-SWITCH SUBTYPE LOGIC
+        // If it's a "Libre" item (Open Tab) AND it has no current slots filled (empty) AND we are adding content
+        const isEmptyLibre = currentItem.emission === 'Libre' && (!currentItem.slots || currentItem.slots.every(s => s === null));
+
+        if (isEmptyLibre && content && beerCategories) {
+            const rawCategory = beerCategories[content];
+            // If we have a category and it is different from current subtype
+            if (rawCategory) {
+                // Map category to a valid subtype if needed. 
+                // Usually category IS the subtype (e.g. 'Lata Pequeña', 'Botella'). 
+                // But we need to handle 'Lata' -> 'Lata Pequeña' resolution if category is just 'Lata'?
+                // Actually beerCategories usually stores the full subtype from creation.
+
+                // Normalize: 
+                const isCan = rawCategory.toLowerCase().includes('lata');
+                const isBottle = rawCategory.toLowerCase().includes('botella');
+
+                let newSubtype = currentSubtype;
+
+                if (isCan && !currentSubtype.toLowerCase().includes('lata')) {
+                    // Switching Bottle -> Lata. Use the specific category or default to Lata Pequeña
+                    newSubtype = rawCategory;
+                } else if (isBottle && !currentSubtype.toLowerCase().includes('botella')) {
+                    newSubtype = rawCategory;
+                }
+
+                if (newSubtype !== currentSubtype) {
+                    console.log(`[OrderContext] Auto-switching subtype from ${currentSubtype} to ${newSubtype} for ${content}`);
+                    currentItem.subtype = newSubtype;
+                    currentSubtype = newSubtype;
+                }
+            }
+        }
+
         // Stock Logic for Local + Variado/Libre Changes
-        // Apply to ALL Local orders now (removed Variado/Libre check)
         if (order.type === 'Local') {
 
             // 1. Validate New Content Stock (if adding)
             if (content) {
-                const hasStock = checkStock(content, 'Unidad', item.subtype, 1);
+                // Use the (potentially updated) currentSubtype
+                const hasStock = checkStock(content, 'Unidad', currentSubtype, 1);
                 if (!hasStock) {
-                    showNotification(`Stock insuficiente para ${content}`, 'error');
+                    showNotification(`Stock insuficiente para ${content} (${currentSubtype})`, 'error');
                     return; // Stop update
                 }
             }
 
             // 2. Restore Old Content
             if (oldContent) {
-                await addStock(oldContent, 'Unidad', item.subtype, 1);
+                // Important: If we switched subtype, we assume the OLD content (if any) matched the OLD subtype?
+                // But we only switch if 'isEmptyLibre' is true, so oldContent must be null/empty. 
+                // So this logic is safe.
+                await addStock(oldContent, 'Unidad', currentSubtype, 1);
             }
 
             // 3. Deduct New Content
             if (content) {
-                await deductStock(content, 'Unidad', item.subtype, 1);
+                await deductStock(content, 'Unidad', currentSubtype, 1);
             }
         }
 
         // State Update
-        // State Update
         const updatedItems = [...order.items];
-        const currentItem = updatedItems[itemIndex];
+        // Ensure we use the modified currentItem
         const newSlots = currentItem.slots ? [...currentItem.slots] : [];
         newSlots[slotIndex] = content;
         const finalSlots = currentItem.emission === 'Libre' ? newSlots.filter(s => s !== null) : newSlots;
-        updatedItems[itemIndex] = { ...currentItem, slots: finalSlots };
+
+        updatedItems[itemIndex] = { ...currentItem, slots: finalSlots, subtype: currentSubtype };
 
         setPendingOrders(prev => prev.map(o => o.id === orderId ? { ...o, items: updatedItems } : o));
 
