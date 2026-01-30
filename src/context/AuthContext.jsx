@@ -27,7 +27,9 @@ export function AuthProvider({ children }) {
         // Listen for changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             if (session) {
-                fetchProfile(session.user);
+                // If session exists, we might need to re-fetch if we don't have full profile yet or on explicit events
+                // For now, relies on initial fetch or polling below
+                if (event === 'SIGNED_IN') fetchProfile(session.user);
             } else {
                 setUser(null);
                 setRole(null);
@@ -38,6 +40,22 @@ export function AuthProvider({ children }) {
 
         return () => subscription.unsubscribe();
     }, []);
+
+    // POLLING: Auto-Sync Profile for Waiting Employees
+    // If user is logged in BUT has no Organization ID (Status: Pending or Unassigned),
+    // we poll every 5 seconds to check if they have been approved.
+    useEffect(() => {
+        let interval;
+        if (user && !organizationId) {
+            console.log('⏳ [AuthContext] User is waiting for approval. Starting poller...');
+            interval = setInterval(() => {
+                fetchProfile(user);
+            }, 5000); // Check every 5 seconds
+        }
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [user, organizationId]);
 
     const fetchProfile = async (currentUser) => {
         try {

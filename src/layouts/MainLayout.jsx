@@ -7,13 +7,20 @@ import { useAuth } from '../context/AuthContext';
 import './MainLayout.css';
 
 export default function MainLayout() {
-    const { role, isLicenseActive } = useAuth();
+    const { role, isLicenseActive, organizationId } = useAuth();
     const location = useLocation();
     const isAjustes = location.pathname === '/ajustes';
     const isDeveloper = location.pathname === '/developer';
 
     const getBlockMessage = () => {
         const path = location.pathname;
+
+        // 1. Guard: No Organization (Pending Approval)
+        if (!organizationId && role !== 'DEVELOPER') { // Developer can bypass
+            return 'Tu solicitud de acceso está pendiente de aprobación. Comunícate con tu administrador.';
+        }
+
+        // 2. Guard: License Inactive
         if (path.includes('vender')) return 'Para usar las funciones del menú Vender activa la licencia.';
         if (path.includes('caja')) return 'Para usar las funciones del menú Caja activa la licencia.';
         if (path.includes('pendientes')) return 'Para usar las funciones del menú Consumos activa la licencia.';
@@ -201,7 +208,7 @@ export default function MainLayout() {
             </nav>
 
             <main key={location.pathname} className={`main-content ${swipeDirection ? swipeDirection : ''}`}>
-                {(isLicenseActive === false && !isAjustes && !isDeveloper) ? (
+                {((!organizationId || isLicenseActive === false) && !isAjustes && !isDeveloper) ? (
                     <div style={{
                         height: '100%',
                         display: 'flex',
@@ -218,29 +225,39 @@ export default function MainLayout() {
                             borderRadius: '24px',
                             maxWidth: '400px'
                         }}>
-                            <h2 style={{ color: '#f97316', marginBottom: '1rem' }}>Acceso Restringido</h2>
+                            <h2 style={{ color: '#f97316', marginBottom: '1rem' }}>
+                                {!organizationId ? 'Solicitud Pendiente' : 'Acceso Restringido'}
+                            </h2>
                             <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', lineHeight: '1.5' }}>
                                 {getBlockMessage()}
                             </p>
-                            <NavLink
-                                to="/ajustes?view=activation"
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '10px',
-                                    padding: '12px 24px',
-                                    background: '#10B981',
-                                    color: 'white',
-                                    borderRadius: '12px',
-                                    textDecoration: 'none',
-                                    fontWeight: 700,
-                                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
-                                }}
-                            >
-                                <img src="/Whatsapp.svg" alt="WhatsApp" style={{ width: '20px', height: '20px' }} />
-                                Activar Ahora
-                            </NavLink>
+
+                            {!organizationId ? (
+                                <NavLink
+                                    to="/ajustes"
+                                    style={{
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                                        padding: '12px 24px', background: '#3b82f6', color: 'white',
+                                        borderRadius: '12px', textDecoration: 'none', fontWeight: 700,
+                                        boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
+                                    }}
+                                >
+                                    Ver Estado
+                                </NavLink>
+                            ) : (
+                                <NavLink
+                                    to="/ajustes?view=activation"
+                                    style={{
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                                        padding: '12px 24px', background: '#10B981', color: 'white',
+                                        borderRadius: '12px', textDecoration: 'none', fontWeight: 700,
+                                        boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+                                    }}
+                                >
+                                    <img src="/Whatsapp.svg" alt="WhatsApp" style={{ width: '20px', height: '20px' }} />
+                                    Activar Ahora
+                                </NavLink>
+                            )}
                         </div>
                     </div>
                 ) : (

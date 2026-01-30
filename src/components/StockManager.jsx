@@ -95,7 +95,7 @@ const StockRow = ({ beer, subtype, emission, icon: Icon }) => {
                         alignItems: 'center',
                         border: '1px solid var(--border-color)'
                     }}>
-                        <span style={{ opacity: 0.8, fontWeight: 400 }}>Costo de Inventario:</span>
+                        <span style={{ opacity: 0.8, fontWeight: 400 }}>Costo:</span>
                         <span style={{ fontWeight: 700 }}>${currentCost.toFixed(2)}</span>
                     </div>
                 </div>

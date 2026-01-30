@@ -380,11 +380,11 @@ const ProductsSection = ({ onGuide }) => {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {getEmissionsForSubtype(normalizeSubtype(selectedConversionSubtype)).map(emission => {
+                    {getEmissionsForSubtype(selectedConversionSubtype).map(emission => {
                         // Standard emissions that are locked (cannot modify units or delete)
                         const standardEmissions = ['Unidad', 'Media Caja', 'Caja', 'Six Pack'];
                         const isStandard = standardEmissions.includes(emission);
-                        const currentUnits = getUnitsPerEmission(emission, normalizeSubtype(selectedConversionSubtype));
+                        const currentUnits = getUnitsPerEmission(emission, selectedConversionSubtype);
 
                         return (
                             <div key={emission} style={{
@@ -428,7 +428,7 @@ const ProductsSection = ({ onGuide }) => {
                                         <button
                                             onClick={() => {
                                                 if (currentUnits > 1) {
-                                                    updateConversion(emission, currentUnits - 1, normalizeSubtype(selectedConversionSubtype));
+                                                    updateConversion(emission, currentUnits - 1, selectedConversionSubtype);
                                                 }
                                             }}
                                             disabled={currentUnits <= 1}
@@ -465,7 +465,7 @@ const ProductsSection = ({ onGuide }) => {
                                         {/* Plus button on RIGHT */}
                                         <button
                                             onClick={() => {
-                                                updateConversion(emission, currentUnits + 1, normalizeSubtype(selectedConversionSubtype));
+                                                updateConversion(emission, currentUnits + 1, selectedConversionSubtype);
                                             }}
                                             style={{
                                                 width: '36px',
@@ -491,7 +491,7 @@ const ProductsSection = ({ onGuide }) => {
                                 {/* Delete button - Only for CUSTOM emissions */}
                                 {!isStandard && (
                                     <button
-                                        onClick={() => removeEmissionType(emission, normalizeSubtype(selectedConversionSubtype))}
+                                        onClick={() => removeEmissionType(emission, selectedConversionSubtype)}
                                         style={{
                                             background: 'none',
                                             border: 'none',

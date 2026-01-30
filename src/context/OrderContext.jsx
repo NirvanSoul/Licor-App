@@ -210,6 +210,12 @@ export const OrderProvider = ({ children }) => {
             }];
         }
 
+        if (!organizationId) {
+            console.error("❌ [OrderContext] Prevented Ghost Write: No Organization ID");
+            showNotification('Error Crítico: No estás vinculado a una organización. Recarga la página o contacta soporte.', 'error', 4000);
+            return null;
+        }
+
         const newOrderData = {
             organization_id: organizationId,
             ticket_number: Math.floor(1000 + Math.random() * 9000),
@@ -353,6 +359,10 @@ export const OrderProvider = ({ children }) => {
     };
 
     const deleteSale = async (orderId) => {
+        if (!organizationId) {
+            showNotification('Error: Sin conexión a organización.', 'error');
+            return;
+        }
         const order = pendingOrders.find(o => o.id === orderId);
         if (!order) return;
 
@@ -611,6 +621,12 @@ export const OrderProvider = ({ children }) => {
             organization_id: organizationId // Ensure Org ID is attached
         };
 
+        if (!organizationId) {
+            console.error("❌ [OrderContext] Prevented Ghost Close: No Organization ID");
+            showNotification('Error: Sin conexión a organización.', 'error');
+            return;
+        }
+
         // 3. Persist to Network (Supabase)
         try {
             const { error: saleError } = await createSales([closedOrder]);
@@ -636,6 +652,10 @@ export const OrderProvider = ({ children }) => {
     };
 
     const processDirectSale = async (customerName, items, paymentMethod, reference) => {
+        if (!organizationId) {
+            showNotification('Error: Sin conexión a organización.', 'error');
+            return null;
+        }
         // 1. Calculate totals
         const { totalBs, totalUsd, optimizedItems } = calculateOrderTotal(items, 'Para Llevar');
 
@@ -760,6 +780,10 @@ export const OrderProvider = ({ children }) => {
         if (organizationId) {
             // USE UPDATE
             await updatePendingOrder(orderId, { customer_name: newName });
+        } else {
+            // Technically we allow local updates if network is down? 
+            // But here the issue is MISSING ORG.
+            console.warn("Update name local only (No Org ID)");
         }
         setPendingOrders(prev => prev.map(o => o.id === orderId ? { ...o, customerName: newName } : o));
         showNotification('Título actualizado', 'success');

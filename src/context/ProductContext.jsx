@@ -439,31 +439,39 @@ export const ProductProvider = ({ children }) => {
     };
 
     const removeEmissionType = async (name, subtype) => {
-        if (['Caja', 'Media Caja', 'Unidad'].includes(name)) {
+        if (['Caja', 'Media Caja', 'Unidad', 'Six Pack'].includes(name)) {
             showNotification('No se puede eliminar la emisión base.', 'error');
             return;
         }
-        try {
-            // Find the item to delete (need its ID for DB deletion)
-            const itemToDelete = rawEmissions.find(e => e.name === name && (e.subtype === subtype || (!e.subtype && !subtype)));
 
-            // Remove specific emission for this subtype OR legacy global with same name
-            const updated = rawEmissions.filter(e => !(e.name === name && (e.subtype === subtype || !e.subtype)));
+        const isLataQuery = subtype && subtype.toLowerCase().includes('lata');
+
+        try {
+            // Find ALL items matching this name and subtype category
+            const matches = rawEmissions.filter(e => {
+                const emissionSubtype = (e.subtype || '').toLowerCase();
+                const isMatch = e.subtype === subtype || (isLataQuery && emissionSubtype.includes('lata'));
+                return e.name === name && isMatch;
+            });
+
+            if (matches.length === 0) return;
+
+            // Remove from local state
+            const updated = rawEmissions.filter(e => !matches.some(m => m.id === e.id));
             setRawEmissions(updated);
 
-            // Should we remove from emissionOptions if no one else uses it?
+            // Update emissionOptions if no more emissions with this name exist
             const stillUsed = updated.some(e => e.name === name);
             if (!stillUsed) {
                 setEmissionOptions(prev => prev.filter(e => e !== name));
             }
 
+            // Delete from DB in parallel
+            await Promise.all(matches.map(item => {
+                if (item.id) return deleteEmission(item.id);
+                return Promise.resolve();
+            }));
 
-            // Delete from DB
-            if (itemToDelete && itemToDelete.id) {
-                // Check if it's a temp ID (timestamp) or UUID. Usually UUID from Supabase.
-                // Even if "mock" ID (Date.now()), we shouldn't error but it won't be in DB.
-                await deleteEmission(itemToDelete.id);
-            }
         } catch (error) {
             console.error("Error removing emission:", error);
             showNotification('Error eliminando emisión', 'error');
@@ -473,18 +481,25 @@ export const ProductProvider = ({ children }) => {
     // NEW: Helper to get emissions relevant for a subtype (plus globals)
     const getEmissionsForSubtype = React.useCallback((subtype) => {
         const globals = ['Unidad', 'Media Caja', 'Caja'];
-        const isLata = subtype && subtype.toLowerCase().includes('lata');
+        const targetSubtype = (subtype || '').toLowerCase();
+        const isLataQuery = targetSubtype.includes('lata');
 
-        // Auto-add Six Pack for any Lata
-        if (isLata) {
+        // Auto-add Six Pack for any Lata variant
+        if (isLataQuery) {
             globals.push('Six Pack');
         }
 
         const custom = (rawEmissions || [])
             .filter(e => {
-                const belongsToSubtype = e.subtype === subtype; // Strict match
+                const emissionSubtype = (e.subtype || '').toLowerCase();
+
+                // Logic: 
+                // 1. Strict match OR
+                // 2. If query is a Lata variant, match any other Lata variant (includes "Lata" generic)
+                const isMatch = e.subtype === subtype || (isLataQuery && emissionSubtype.includes('lata'));
+
                 const isSixPack = e.name && e.name.toLowerCase().trim() === 'six pack';
-                return belongsToSubtype && !isSixPack;
+                return isMatch && !isSixPack;
             })
             .map(e => e.name);
 
@@ -495,14 +510,15 @@ export const ProductProvider = ({ children }) => {
         const reservedKeywords = ['Unidad', 'Caja', 'Media Caja', 'Six Pack', 'Pack', 'Bulto'];
 
         return merged.filter(name => {
+            const lowerName = name.toLowerCase().trim();
             // Always allow reserved keywords
-            if (reservedKeywords.some(k => k.toLowerCase() === name.toLowerCase())) return true;
+            if (reservedKeywords.some(k => k.toLowerCase() === lowerName)) return true;
 
             // Remove "Six Pack" if not lata
-            if (!isLata && name.toLowerCase().trim() === 'six pack') return false;
+            if (!isLataQuery && lowerName === 'six pack') return false;
 
             // Filter out if it matches a Beer Type
-            const isBeer = beerTypes.some(b => b.toLowerCase() === name.toLowerCase());
+            const isBeer = beerTypes.some(b => b.toLowerCase() === lowerName);
             if (isBeer) return false;
 
             return true;
@@ -869,10 +885,14 @@ export const ProductProvider = ({ children }) => {
         const conversionKey = `${emission}_${subtype}`;
         if (conversions[conversionKey]) return conversions[conversionKey];
 
-        const dbEmission = rawEmissions.find(e =>
-            e.name === emission &&
-            (e.subtype === subtype || (e.subtype && subtype && e.subtype.toLowerCase() === subtype.toLowerCase()))
-        );
+        const targetSubtype = (subtype || '').toLowerCase();
+        const isLataQuery = targetSubtype.includes('lata');
+
+        const dbEmission = rawEmissions.find(e => {
+            const emissionSubtype = (e.subtype || '').toLowerCase();
+            const isMatch = e.subtype === subtype || (isLataQuery && emissionSubtype.includes('lata'));
+            return e.name === emission && isMatch;
+        });
         if (dbEmission && dbEmission.units) return dbEmission.units;
 
         const legacy = rawEmissions.find(e => e.name === emission && !e.subtype);

@@ -83,16 +83,20 @@ export default function ContainerSelector({ value, onChange, allowedType }) {
     // Filter options based on allowedType
     const mainOptions = [
         { label: 'Botella', value: 'Botella', isActive: !isCan },
-        { label: 'Lata', value: 'Lata', isActive: isCan }
+        { label: 'Lata', value: 'Lata Pequeña', isActive: isCan }
     ].filter(opt => {
         if (!allowedType) return true;
-        // Normalize: if allowedType is 'Botella Tercio', it allows 'Botella'. 
-        // If it's 'Lata', it allows 'Lata'.
         const category = allowedType.toLowerCase();
         if (category.includes('botella')) return opt.value === 'Botella';
-        if (category.includes('lata')) return opt.value === 'Lata';
+        if (category.includes('lata')) return opt.value === 'Lata'; // Allow matching 'Lata' generic
         return true;
     });
+
+    // Size Options for Lata
+    const sizeOptions = [
+        { label: 'Pequeña', value: 'Lata Pequeña', isActive: !isLarge },
+        { label: 'Grande', value: 'Lata Grande', isActive: isLarge }
+    ];
 
     return (
         <div className="container-selector" style={{
@@ -102,7 +106,6 @@ export default function ContainerSelector({ value, onChange, allowedType }) {
             minWidth: '150px',
             flexShrink: 0
         }}>
-
             {/* Level 1: Main Type (Botella vs Lata) */}
             {mainOptions.length > 1 ? (
                 <SlidingSegmentedControl
@@ -122,6 +125,17 @@ export default function ContainerSelector({ value, onChange, allowedType }) {
                     {mainOptions[0].label}
                 </div>
             )}
+
+            {/* Level 2: Size (Only for Lata) */}
+            {isCan && (
+                <div style={{ animation: 'slideUpFade 0.3s ease forwards' }}>
+                    <SlidingSegmentedControl
+                        onSelect={(opt) => onChange(opt.value)}
+                        options={sizeOptions}
+                    />
+                </div>
+            )}
+
             <style>{`
                 @keyframes slideUpFade {
                     from { opacity: 0; transform: translateY(-4px) scale(0.98); }
