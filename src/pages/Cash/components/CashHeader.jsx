@@ -13,9 +13,7 @@ export default function CashHeader({ date }) {
                     fontSize: '24px',
                     fontWeight: 800,
                     margin: '0 0 0.5rem 0',
-                    background: 'linear-gradient(to right, #fff, #dadada)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent'
+                    color: 'var(--text-primary)'
                 }}>
                     Control de Caja
                 </h1>

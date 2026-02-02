@@ -37,7 +37,9 @@ export default function CloseTicketModal({ order, totalUsd, totalBs, currentRate
             <div className="pending-modal-overlay" onClick={onClose}>
                 <div className="pending-modal-content" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
                     <div className="pending-modal-header">
-                        <h3 className="pending-modal-title">Confirmar Entrega</h3>
+                        <div>
+                            <h3 className="pending-modal-title" style={{ textAlign: 'left', width: 'auto' }}>Confirmar Entrega</h3>
+                        </div>
                         <button className="close-btn" onClick={onClose}>
                             <X size={24} />
                         </button>
@@ -90,7 +92,9 @@ export default function CloseTicketModal({ order, totalUsd, totalBs, currentRate
         <div className="pending-modal-overlay" onClick={onClose}>
             <div className="pending-modal-content" style={{ maxWidth: '450px' }} onClick={e => e.stopPropagation()}>
                 <div className="pending-modal-header">
-                    <h3 className="pending-modal-title">Cerrar Ticket y Cobrar</h3>
+                    <div>
+                        <h3 className="pending-modal-title" style={{ textAlign: 'left', width: 'auto' }}>Cerrar Ticket y Cobrar</h3>
+                    </div>
                     <button className="close-btn" onClick={onClose}>
                         <X size={24} />
                     </button>

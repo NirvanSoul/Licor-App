@@ -13,7 +13,7 @@ export default function RenameModal({ order, onClose, onRename }) {
             <div className="pending-modal-content" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
                 <div className="pending-modal-header">
                     <div>
-                        <h3 className="pending-modal-title">Renombrar Ticket</h3>
+                        <h3 className="pending-modal-title" style={{ textAlign: 'left', width: 'auto' }}>Renombrar Ticket</h3>
                         <p className="pending-modal-subtitle">Ticket #{order.ticketNumber}</p>
                     </div>
                     <button className="close-btn" onClick={onClose}>

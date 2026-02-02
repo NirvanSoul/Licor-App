@@ -14,7 +14,7 @@ export default function OpenTicketModal({ onClose, onConfirm }) {
             <div className="pending-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
                 <div className="pending-modal-header" style={{ marginBottom: '1.5rem' }}>
                     <div>
-                        <h3 className="pending-modal-title">Abrir Carta</h3>
+                        <h3 className="pending-modal-title" style={{ textAlign: 'left', width: 'auto' }}>Abrir Carta</h3>
                         <p className="pending-modal-subtitle">Ingrese el nombre del cliente (Opcional)</p>
                     </div>
                     <button className="close-btn" onClick={onClose}>

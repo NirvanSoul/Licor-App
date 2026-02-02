@@ -93,14 +93,14 @@
     justify-content: space-between;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     border: 1px solid rgba(0, 0, 0, 0.05);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
     position: relative;
     overflow: hidden;
 }
 
 .dashboard-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 /* Hero Card - Main Sales */
@@ -318,7 +318,7 @@ h2.card-title {
     /* Orange Border */
     overflow: hidden;
     position: relative;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .table-title-bar {
@@ -693,7 +693,7 @@ h2.card-title {
     max-height: 85vh;
     border-radius: 24px;
     border: 1px solid var(--accent-color);
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 10px 25px -6px rgba(0, 0, 0, 0.15);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -731,10 +731,7 @@ h2.card-title {
 }
 
 .close-btn {
-    position: absolute;
-    top: 0.75rem;
-    right: 0.75rem;
-    background: rgba(0, 0, 0, 0.05);
+    background: transparent;
     border: none;
     border-radius: 50%;
     width: 36px;
@@ -746,20 +743,21 @@ h2.card-title {
     color: var(--text-secondary);
     transition: all 0.2s ease;
     z-index: 10;
+    flex-shrink: 0;
 }
 
 .dark .close-btn {
-    background: rgba(255, 255, 255, 0.05);
+    background: transparent;
 }
 
 .close-btn:hover {
-    background: rgba(0, 0, 0, 0.1);
+    background: transparent;
     color: var(--text-primary);
     transform: scale(1.1);
 }
 
 .dark .close-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: transparent;
 }
 
 .nav-btn {
@@ -1052,7 +1050,7 @@ h2.card-title {
     white-space: nowrap;
     margin-bottom: 8px;
     border: 1px solid rgba(0, 0, 0, 0.05);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     z-index: 100;
 }
 
@@ -1124,7 +1122,7 @@ h2.card-title {
 }
 
 .close-btn {
-    background: rgba(0, 0, 0, 0.05);
+    background: transparent;
     border: none;
     color: var(--text-primary);
     width: 36px;
@@ -1138,13 +1136,14 @@ h2.card-title {
 }
 
 .dark .close-btn {
-    background: rgba(255, 255, 255, 0.05);
+    background: transparent;
     color: white;
 }
 
 .close-btn:hover {
-    background: rgba(239, 68, 68, 0.2);
-    color: #ef4444;
+    background: transparent;
+    color: var(--text-primary);
+    transform: scale(1.1);
 }
 
 /* Custom Scrollbar Utility */

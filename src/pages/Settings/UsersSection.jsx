@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../supabaseClient';
 import { Copy, Plus, UserCheck, UserX, Shield, RefreshCw, Key, Users, CheckCircle, XCircle, Clock, Share2 } from 'lucide-react';
 import { useNotification } from '../../context/NotificationContext'; // Assuming context exists
+import CustomConfirmationModal from '../../components/CustomConfirmationModal';
 
 const UsersSection = () => {
     const { user, organizationId, role, organizationName, loading, refreshProfile } = useAuth();
@@ -276,9 +277,43 @@ const UsersSection = () => {
         }
     };
 
-    const handleApprove = async (reqId) => {
-        if (!confirm('¿Aprobar acceso a este usuario?')) return;
+    // --- CONFIRMATION MODAL STATE ---
+    const [confirmation, setConfirmation] = useState({
+        isOpen: false,
+        type: 'info', // info | success | danger | warning
+        title: '',
+        message: '',
+        action: null // function to execute
+    });
 
+    const closeConfirmation = () => setConfirmation(prev => ({ ...prev, isOpen: false }));
+
+    const handleApproveClick = (reqId) => {
+        const req = requests.find(r => r.id === reqId);
+        setConfirmation({
+            isOpen: true,
+            type: 'success',
+            title: '¿Aprobar Acceso?',
+            message: `¿Estás seguro de aceptar a ${req?.full_name || 'este usuario'} en tu organización?`,
+            confirmText: 'Sí, Aprobar',
+            action: () => executeApprove(reqId)
+        });
+    };
+
+    const handleRejectClick = (reqId) => {
+        const req = requests.find(r => r.id === reqId);
+        setConfirmation({
+            isOpen: true,
+            type: 'danger',
+            title: '¿Rechazar Solicitud?',
+            message: `¿Estás seguro de rechazar a ${req?.full_name || 'este usuario'}? Esta acción no se puede deshacer.`,
+            confirmText: 'Sí, Rechazar',
+            action: () => executeReject(reqId)
+        });
+    };
+
+    const executeApprove = async (reqId) => {
+        closeConfirmation();
         try {
             const req = requests.find(r => r.id === reqId);
             if (!req) return;
@@ -303,12 +338,10 @@ const UsersSection = () => {
             if (profError) throw profError;
 
             // 3. UI Updates
-            alert('Usuario aprobado con éxito.');
+            showNotification('Usuario aprobado con éxito.', 'success');
             setRequests(prev => prev.filter(r => r.id !== reqId));
 
-            // Refetch employees or optimistically add
-            // Simple approach: Add to list if we have basic info. 
-            // Better: trigger a re-fetch of employees if we want full details, but for now:
+            // Optimistically add
             setEmployees(prev => [...prev, {
                 id: req.user_id,
                 full_name: req.full_name,
@@ -319,13 +352,12 @@ const UsersSection = () => {
 
         } catch (err) {
             console.error(err);
-            alert('Error al aprobar usuario.');
+            showNotification('Error al aprobar usuario.', 'error');
         }
     };
 
-    const handleReject = async (reqId) => {
-        if (!confirm('¿Rechazar solicitud?')) return;
-
+    const executeReject = async (reqId) => {
+        closeConfirmation();
         try {
             const { error } = await supabase
                 .from('organization_join_requests')
@@ -334,10 +366,11 @@ const UsersSection = () => {
 
             if (error) throw error;
 
+            showNotification('Solicitud rechazada.', 'info');
             setRequests(prev => prev.filter(r => r.id !== reqId));
         } catch (err) {
             console.error(err);
-            alert('Error al rechazar usuario.');
+            showNotification('Error al rechazar usuario.', 'error');
         }
     };
 
@@ -422,23 +455,6 @@ const UsersSection = () => {
                                 >
                                     <RefreshCw size={18} /> Refrescar Perfil
                                 </button>
-
-                                <button
-                                    type="button"
-                                    onClick={() => setShowDebug(!showDebug)}
-                                    style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '0.7rem', marginTop: '1rem', cursor: 'pointer', opacity: 0.5 }}
-                                >
-                                    {showDebug ? 'Ocultar diagnóstico' : 'Mostrar diagnóstico técnico'}
-                                </button>
-
-                                {showDebug && (
-                                    <div style={{ marginTop: '1rem', padding: '10px', background: 'rgba(0,0,0,0.05)', borderRadius: '8px', textAlign: 'left', fontSize: '0.75rem', fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
-                                        <div>User ID: {user?.id || 'null'}</div>
-                                        <div>Role: {role || 'null'}</div>
-                                        <div>Org ID: {organizationId || 'null'}</div>
-                                        <div>Loading: {loading ? 'true' : 'false'}</div>
-                                    </div>
-                                )}
                             </div>
                         </form>
                     )}
@@ -586,7 +602,7 @@ const UsersSection = () => {
                                     </div>
                                     <div style={{ display: 'flex', gap: '8px' }}>
                                         <button
-                                            onClick={() => handleReject(req.id)}
+                                            onClick={() => handleRejectClick(req.id)}
                                             style={{
                                                 background: '#fee2e2', color: '#dc2626', border: 'none',
                                                 width: '40px', height: '40px', borderRadius: '12px', cursor: 'pointer',
@@ -595,7 +611,7 @@ const UsersSection = () => {
                                             <XCircle size={20} />
                                         </button>
                                         <button
-                                            onClick={() => handleApprove(req.id)}
+                                            onClick={() => handleApproveClick(req.id)}
                                             style={{
                                                 background: '#dcfce7', color: '#16a34a', border: 'none',
                                                 width: '40px', height: '40px', borderRadius: '12px', cursor: 'pointer',
@@ -649,6 +665,17 @@ const UsersSection = () => {
                 }
 
             </div >
+
+            {/* Generic Confirmation Modal */}
+            <CustomConfirmationModal
+                isOpen={confirmation.isOpen}
+                title={confirmation.title}
+                message={confirmation.message}
+                confirmText={confirmation.confirmText}
+                type={confirmation.type}
+                onConfirm={confirmation.action}
+                onCancel={closeConfirmation}
+            />
         </div >
     );
 };

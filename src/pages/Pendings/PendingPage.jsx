@@ -16,6 +16,8 @@ import WasteModal from './modals/WasteModal';
 import CloseTicketModal from './modals/CloseTicketModal';
 import SuccessModal from './modals/SuccessModal';
 
+import CustomConfirmationModal from '../../components/CustomConfirmationModal';
+
 export default function PendingPage() {
     const { pendingOrders, addItemToOrder, closeOrder, createOrder, calculateOrderTotal, updateOrderName, cancelOrder } = useOrder();
     const { beerTypes, getPrice, currencySymbol, reportWaste, mainCurrency, currentRate, getUnitsPerEmission } = useProduct();
@@ -36,6 +38,12 @@ export default function PendingPage() {
     const [closingOrderData, setClosingOrderData] = useState(null); // { id, totalUsd, totalBs }
     const [closedOrderResult, setClosedOrderResult] = useState(null); // { ticketNumber, totalBs, totalUsd, customerName } (Success)
 
+    // Delete Confirmation State
+    const [deleteConfirmation, setDeleteConfirmation] = useState({
+        isOpen: false,
+        orderId: null
+    });
+
     // Listen for Menu Reset
     useEffect(() => {
         const handleResetFlow = (e) => {
@@ -48,6 +56,7 @@ export default function PendingPage() {
                 setClosingOrderData(null);
                 setClosedOrderResult(null);
                 setExpandedOrders({});
+                setDeleteConfirmation({ isOpen: false, orderId: null });
             }
         };
         window.addEventListener('reset-flow', handleResetFlow);
@@ -56,7 +65,7 @@ export default function PendingPage() {
 
     // Notify layout when modals open/close
     useEffect(() => {
-        if (showOpenTabModal || showWasteModal || renamingOrder || selectedOrderForAdd || closingOrderData || closedOrderResult) {
+        if (showOpenTabModal || showWasteModal || renamingOrder || selectedOrderForAdd || closingOrderData || closedOrderResult || deleteConfirmation.isOpen) {
             document.body.style.overflow = 'hidden';
             window.dispatchEvent(new CustomEvent('modalopen'));
         } else {
@@ -67,7 +76,7 @@ export default function PendingPage() {
             document.body.style.overflow = 'unset';
             window.dispatchEvent(new CustomEvent('modalclose'));
         };
-    }, [showOpenTabModal, showWasteModal, renamingOrder, selectedOrderForAdd, closingOrderData, closedOrderResult]);
+    }, [showOpenTabModal, showWasteModal, renamingOrder, selectedOrderForAdd, closingOrderData, closedOrderResult, deleteConfirmation.isOpen]);
 
     // --- LOGIC ---
 
@@ -124,9 +133,17 @@ export default function PendingPage() {
         setRenamingOrder(null);
     };
 
-    const handleCancelTicket = async (id) => {
-        if (window.confirm('¿Estás seguro de eliminar este ticket? Esta acción no se puede deshacer.')) {
-            await cancelOrder(id);
+    const handleCancelTicket = (id) => {
+        setDeleteConfirmation({
+            isOpen: true,
+            orderId: id
+        });
+    };
+
+    const executeDelete = async () => {
+        if (deleteConfirmation.orderId) {
+            await cancelOrder(deleteConfirmation.orderId);
+            setDeleteConfirmation({ isOpen: false, orderId: null });
         }
     };
 
@@ -271,6 +288,17 @@ export default function PendingPage() {
             <SuccessModal
                 closedOrderInfo={closedOrderResult}
                 onClose={() => setClosedOrderResult(null)}
+            />
+
+            <CustomConfirmationModal
+                isOpen={deleteConfirmation.isOpen}
+                title="¿Eliminar Ticket?"
+                message="¿Estás seguro de eliminar este ticket? Esta acción no se puede deshacer."
+                confirmText="Sí, Eliminar"
+                cancelText="Cancelar"
+                type="danger"
+                onConfirm={executeDelete}
+                onCancel={() => setDeleteConfirmation({ isOpen: false, orderId: null })}
             />
 
         </div>

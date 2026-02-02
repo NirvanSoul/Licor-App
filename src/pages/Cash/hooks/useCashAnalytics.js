@@ -204,28 +204,35 @@ export function useCashAnalytics({ pendingOrders, getPrice, getUnitsPerEmission,
 
         const weeklyStats = getWeeklyStats();
 
-        // Profit Stats
-        const getProfitStats = () => {
+        // Generic Profit Calculation
+        const calculateProfit = (startDate, endDate) => {
             const inventoryValue = getInventoryAssetValue ? getInventoryAssetValue() : 0;
-            const currentWeekMilis = weeklyStats.data.reduce((a, b) => a + b, 0);
+            let revenue = 0;
+            let cogs = 0;
+            const debugLog = [];
 
-            let weekCOGS = 0;
-            const debugLog = []; // DEBUG
+            // Ensure dates are valid
+            const start = new Date(startDate);
+            start.setHours(0, 0, 0, 0);
 
-            const now = new Date();
-            const day = now.getDay();
-            const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-            const monday = new Date(now.setDate(diff));
-            monday.setHours(0, 0, 0, 0);
+            // If no end date, assume up to now/end of time, or strict window? 
+            // Standardize: inclusive start, inclusive end (to end of day)
+            const end = endDate ? new Date(endDate) : new Date();
+            end.setHours(23, 59, 59, 999);
 
             (pendingOrders || []).forEach(o => {
                 if (o.status === 'PAID') {
                     const d = new Date(o.closedAt || o.createdAt);
-                    if (d >= monday) {
+                    if (d >= start && d <= end) {
+                        // Add to revenue
+                        const total = (o.totalAmountUsd !== undefined && o.totalAmountUsd !== null)
+                            ? Number(o.totalAmountUsd)
+                            : getOrderTotal(o.items || []);
+                        revenue += total;
+
+                        // Calculate COGS
                         (o.items || []).forEach(item => {
                             if (!item) return;
-
-                            // Robust property access
                             const name = (item.beerType || item.product_name || item.name || '').trim();
                             const emission = (item.emission || 'Unidad').trim();
                             const subtype = (item.subtype || 'Botella').trim();
@@ -233,47 +240,124 @@ export function useCashAnalytics({ pendingOrders, getPrice, getUnitsPerEmission,
 
                             if (!name) return;
 
-                            // Handle Variado items
                             if (name === 'Variado' && item.composition) {
                                 Object.entries(item.composition).forEach(([subBeer, units]) => {
                                     const costPerUnit = getCostPrice(subBeer, 'Unidad', subtype);
-                                    weekCOGS += (costPerUnit * units * qty);
+                                    cogs += (costPerUnit * units * qty);
                                 });
                             } else if (name !== 'Variado') {
                                 const cost = getCostPrice(name, emission, subtype);
-                                weekCOGS += (cost * qty);
+                                cogs += (cost * qty);
 
-                                // DEBUG: Keep track of zero costs to identify issues
+                                // DEBUG
                                 if (cost === 0) {
-                                    console.warn(`[ProfitStats] Zero Cost found for: ${name} ${emission} ${subtype}`);
+                                    // console.warn(`[ProfitStats] Zero Cost for: ${name}`);
                                 }
-
-                                debugLog.push({
-                                    item: `${name} ${emission} ${subtype}`,
-                                    qty,
-                                    costPerUnit: cost,
-                                    totalCost: cost * qty
-                                });
                             }
                         });
                     }
                 }
             });
 
-            // DEBUGLOG in return
-            const weekNet = currentWeekMilis - weekCOGS;
-            const weekMargin = currentWeekMilis > 0 ? ((weekNet / currentWeekMilis) * 100) : 0;
+            const net = revenue - cogs;
+            const margin = revenue > 0 ? ((net / revenue) * 100) : 0;
 
             return {
                 inventoryValue,
-                weekRevenue: currentWeekMilis,
-                weekCOGS,
-                weekNet,
-                weekMargin,
-                debugLog
+                revenue,
+                cogs,
+                net,
+                margin
+                // debugLog
             };
         };
 
+        // Chart Data Aggregation
+        const getChartData = (startDate, endDate, interval) => {
+            // Ensure dates are valid
+            const start = new Date(startDate);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+
+            const buckets = {};
+            const labels = {};
+
+            // Initialize Buckets
+            if (interval === 'hour') {
+                for (let i = 0; i < 24; i++) {
+                    const key = i;
+                    buckets[key] = 0;
+                    labels[key] = `${i}:00`;
+                }
+            } else if (interval === 'day') {
+                const curr = new Date(start);
+                while (curr <= end) {
+                    const key = curr.toDateString(); // "Mon Jan 01 2024"
+                    buckets[key] = 0;
+                    // Format: Mon 01
+                    const dayName = curr.toLocaleDateString('es-ES', { weekday: 'short' });
+                    const dayNum = curr.getDate();
+                    labels[key] = `${dayName} ${dayNum}`;
+                    curr.setDate(curr.getDate() + 1);
+                }
+            } else if (interval === 'month') {
+                const curr = new Date(start);
+                // Reset to first of month to ensure clean loop
+                curr.setDate(1);
+                while (curr <= end) {
+                    const key = `${curr.getFullYear()}-${curr.getMonth()}`;
+                    buckets[key] = 0;
+                    labels[key] = curr.toLocaleDateString('es-ES', { month: 'short' });
+
+                    // Advance month
+                    curr.setMonth(curr.getMonth() + 1);
+                }
+            }
+
+            // Fill Data
+            (pendingOrders || []).forEach(o => {
+                if (o.status === 'PAID') {
+                    const d = new Date(o.closedAt || o.createdAt);
+                    if (d >= start && d <= end) {
+                        const total = (o.totalAmountUsd !== undefined && o.totalAmountUsd !== null)
+                            ? Number(o.totalAmountUsd)
+                            : getOrderTotal(o.items || []);
+
+                        let key;
+                        if (interval === 'hour') {
+                            key = d.getHours();
+                        } else if (interval === 'day') {
+                            const dClone = new Date(d);
+                            dClone.setHours(0, 0, 0, 0);
+                            key = dClone.toDateString();
+                        } else if (interval === 'month') {
+                            key = `${d.getFullYear()}-${d.getMonth()}`;
+                        }
+
+                        if (buckets.hasOwnProperty(key)) {
+                            buckets[key] += total;
+                        }
+                    }
+                }
+            });
+
+            // Convert to Array
+            return Object.keys(buckets).map(key => ({
+                label: labels[key] || key,
+                value: buckets[key],
+                originalKey: key
+            }));
+        };
+
+        // Profit Stats (Current Week Default)
+        const getProfitStats = () => {
+            const now = new Date();
+            const day = now.getDay();
+            const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+            const monday = new Date(now.setDate(diff));
+            return calculateProfit(monday);
+        };
 
         return {
             todayStats: { totalSales, closedCount, openCount, avgTicket: closedCount ? totalSales / closedCount : 0 },
@@ -283,6 +367,8 @@ export function useCashAnalytics({ pendingOrders, getPrice, getUnitsPerEmission,
             lowStockConnect: alerts.slice(0, 5),
             weeklyStats,
             profitStats: getProfitStats(),
+            calculateProfit, // EXPORTED
+            getChartData, // EXPORTED
             getOrderTotal
         };
 

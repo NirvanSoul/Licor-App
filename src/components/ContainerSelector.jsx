@@ -112,7 +112,7 @@ export default function ContainerSelector({ value, onChange, allowedType }) {
                     onSelect={(opt) => onChange(opt.value)}
                     options={mainOptions}
                 />
-            ) : (
+            ) : mainOptions.length === 1 ? (
                 <div style={{
                     background: 'var(--text-primary)',
                     color: 'var(--bg-card)',
@@ -124,7 +124,7 @@ export default function ContainerSelector({ value, onChange, allowedType }) {
                 }}>
                     {mainOptions[0].label}
                 </div>
-            )}
+            ) : null}
 
             {/* Level 2: Size (Only for Lata) */}
             {isCan && (

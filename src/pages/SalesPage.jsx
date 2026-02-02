@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AccordionSection from '../components/AccordionSection';
 import ContainerSelector from '../components/ContainerSelector';
+import CustomConfirmationModal from '../components/CustomConfirmationModal'; // Import new modal
 import { Trash2, ShoppingBag, Store, User, Hash, CheckCircle, PlusCircle, X, AlertTriangle, AlertCircle, Check } from 'lucide-react';
 import { useProduct } from '../context/ProductContext';
 import { useOrder } from '../context/OrderContext';
@@ -560,6 +561,19 @@ export default function SalesPage() {
         return orderState.beerType;
     }
 
+    // Confirm Delete Modal State
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+    const handleDeleteClick = () => {
+        setShowDeleteConfirm(true);
+    };
+
+    const confirmDelete = () => {
+        setCartItems([]);
+        resetOrderState();
+        setShowDeleteConfirm(false);
+    };
+
     return (
         <div className="sales-container-v2">
 
@@ -929,7 +943,7 @@ export default function SalesPage() {
 
                 {(cartItems.length > 0 || isSelectionComplete() || (orderState.beerVariety === 'Variado' && orderState.consumptionMode === 'Local' && orderState.emission && orderState.beerType)) && (
                     <div className="summary-actions">
-                        <button className="delete-action" onClick={handleClearBill}>
+                        <button className="delete-action" onClick={handleDeleteClick}>
                             <Trash2 size={16} /> {ticketStep > 0 ? 'Cancelar Ticket' : 'Limpiar Todo'}
                         </button>
                     </div>
@@ -1031,6 +1045,18 @@ export default function SalesPage() {
                     </div>
                 </div>
             )}
+
+            {/* Custom Delete Confirmation Modal */}
+            <CustomConfirmationModal
+                isOpen={showDeleteConfirm}
+                title="¿Eliminar Ticket?"
+                message="Se perderán todos los productos seleccionados."
+                confirmText="Sí, Eliminar"
+                cancelText="Cancelar"
+                type="danger"
+                onConfirm={confirmDelete}
+                onCancel={() => setShowDeleteConfirm(false)}
+            />
 
             {/* Stock Error Modal - THEMED WITH RED ICON */}
             {stockError && (

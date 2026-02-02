@@ -40,7 +40,9 @@ export default function CashPage() {
         weeklyStats,
         profitStats,
         lowStockConnect,
-        topProducts
+        topProducts,
+        calculateProfit, // Destructure
+        getChartData
     } = analytics;
 
     // 2. UI State Hooks
@@ -319,9 +321,8 @@ export default function CashPage() {
                             />
                         </div>
 
-                        {/* Productos por Agotarse */}
                         <div className="dashboard-card col-span-6">
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                                 <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#EF4444', margin: 0 }}>Productos por Agotarse</h3>
                                 <AlertTriangle size={18} style={{ color: '#EF4444' }} />
                             </div>
@@ -357,7 +358,7 @@ export default function CashPage() {
 
                         {/* Top Products */}
                         <div className="dashboard-card col-span-6">
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                                 <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Top Productos</h3>
                                 <Package size={18} className="text-secondary" />
                             </div>
@@ -407,7 +408,9 @@ export default function CashPage() {
 
             {showProfitModal && (
                 <ProfitModal
-                    profitStats={profitStats}
+                    defaultStats={profitStats}
+                    calculateProfit={calculateProfit}
+                    getChartData={getChartData}
                     onClose={() => setShowProfitModal(false)}
                     currencySymbol={productContext.currencySymbol}
                 />

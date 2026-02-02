@@ -528,7 +528,7 @@ export const OrderProvider = ({ children }) => {
                     const priceUsd = getPrice(beerName, 'Unidad', subtype, 'local');
                     totalBs += remaining * priceBs;
                     totalUsd += remaining * priceUsd;
-                    // details.push(`${remaining} ${beerName} (U)`); // Optional detail
+                    details.push(`${remaining} ${beerName} (U)`);
 
                     optimizedItems.push({
                         id: Date.now() + Math.random(),

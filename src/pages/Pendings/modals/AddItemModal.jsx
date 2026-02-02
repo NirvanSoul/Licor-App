@@ -10,7 +10,7 @@ export default function AddItemModal({ order, beerTypes, currencySymbol, getPric
             <div className="pending-modal-content" onClick={e => e.stopPropagation()}>
                 <div className="pending-modal-header">
                     <div>
-                        <h3 className="pending-modal-title">Agregar Producto</h3>
+                        <h3 className="pending-modal-title" style={{ textAlign: 'left', width: 'auto' }}>Agregar Producto</h3>
                         <p className="pending-modal-subtitle">Cliente: {order.customerName}</p>
                     </div>
                     <button className="close-btn" onClick={onClose}>

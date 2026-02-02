@@ -16,7 +16,7 @@ export default function WasteModal({ beerTypes, onClose, onConfirm }) {
             <div className="pending-modal-content" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
                 <div className="pending-modal-header">
                     <div>
-                        <h3 className="pending-modal-title" style={{ color: '#EF4444' }}>Reportar Botella Rota</h3>
+                        <h3 className="pending-modal-title" style={{ textAlign: 'left', width: 'auto', color: '#EF4444' }}>Reportar Botella Rota</h3>
                         <p className="pending-modal-subtitle">Registra botellas rotas o daños</p>
                     </div>
                     <button className="close-btn" onClick={onClose}>

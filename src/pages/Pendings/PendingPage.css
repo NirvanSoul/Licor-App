@@ -394,18 +394,15 @@
 
 .pending-modal-header {
     display: flex;
-    justify-content: center;
+    justify-content: space-between;
     align-items: center;
     margin-bottom: 1.5rem;
-    position: relative;
 }
 
 .pending-modal-title {
     font-size: 1.25rem;
     font-weight: 700;
     color: var(--text-primary);
-    text-align: center;
-    width: 100%;
 }
 
 .pending-modal-subtitle {
@@ -415,10 +412,7 @@
 }
 
 .close-btn {
-    position: absolute;
-    top: 1rem;
-    right: 1rem;
-    background: rgba(0, 0, 0, 0.05);
+    background: transparent;
     border: none;
     border-radius: 50%;
     width: 36px;
@@ -430,20 +424,21 @@
     color: var(--text-secondary);
     transition: all 0.2s ease;
     z-index: 10;
+    flex-shrink: 0;
 }
 
 .dark .close-btn {
-    background: rgba(255, 255, 255, 0.05);
+    background: transparent;
 }
 
 .close-btn:hover {
-    background: rgba(0, 0, 0, 0.1);
+    background: transparent;
     color: var(--text-primary);
     transform: scale(1.1);
 }
 
 .dark .close-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: transparent;
 }
 
 .section-title {
