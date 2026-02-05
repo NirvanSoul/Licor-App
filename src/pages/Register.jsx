@@ -249,7 +249,7 @@ export default function Register() {
 
                             {/* 2. Helper Text */}
                             <div style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                                Pídelo a tu empleador (Opcional). <br />
+                                Pídelo a tu jefe (Opcional). <br />
                                 Puedes ingresar sin código y unirte después.
                             </div>
 

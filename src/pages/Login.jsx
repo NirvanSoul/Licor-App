@@ -100,7 +100,7 @@ export default function Login() {
                                 <img src={StoreIcon} alt="Owner" />
                             </div>
                             <div className="text-content">
-                                <h3>Empleador</h3>
+                                <h3>Jefe</h3>
                                 <p>Gestión total del negocio</p>
                             </div>
                             <ArrowRight className="arrow-icon" size={20} strokeWidth={3} />
@@ -183,7 +183,7 @@ export default function Login() {
                         <img src={selectedRole === 'owner' ? StoreIcon : EmployeeIcon} alt="Icon" style={{ width: '32px', height: '32px', filter: 'brightness(0) invert(1)' }} />
                     </div>
                     <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'white', margin: 0 }}>
-                        {selectedRole === 'owner' ? 'Login Empleador' : 'Login Empleado'}
+                        {selectedRole === 'owner' ? 'Login Jefe' : 'Login Jefe'}
                     </h2>
                     <p style={{ color: '#a1a1aa', marginTop: '0.5rem', fontSize: '0.95rem' }}>
                         Ingresa tus credenciales para continuar
